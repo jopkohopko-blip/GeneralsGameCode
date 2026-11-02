@@ -504,7 +504,18 @@ void MapCache::loadMapsFromMapCacheINI( const AsciiString &mapDir )
 
 	if (TheFileSystem->doesFileExist(fname.str()))
 	{
-		ini.load( fname, INI_LOAD_OVERWRITE, nullptr );
+		// TheSuperHackers @bugfix A damaged map cache no longer stops the game from starting.
+		// Forget what was read from it, so the maps are parsed again and the cache file is rewritten.
+		try
+		{
+			ini.load( fname, INI_LOAD_OVERWRITE, nullptr );
+		}
+		catch (...)
+		{
+			DEBUG_LOG(("MapCache::loadMapsFromMapCacheINI - Failed to parse '%s', ignoring the map cache", fname.str()));
+			prepareUnseenMaps(mapDir);
+			clearUnseenMaps(mapDir);
+		}
 	}
 }
 

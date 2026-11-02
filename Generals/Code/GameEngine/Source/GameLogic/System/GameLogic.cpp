@@ -2187,7 +2187,15 @@ void GameLogic::loadMapINI( AsciiString mapName )
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading map.ini"));
 		INI ini;
-		ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, nullptr );
+		// TheSuperHackers @bugfix A broken map.ini in a custom map no longer crashes the game. Skip the rest of the file instead.
+		try
+		{
+			ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, nullptr );
+		}
+		catch (...)
+		{
+			DEBUG_LOG(("GameLogic::loadMapINI - Failed to parse '%s', ignoring the rest of it", fullFledgeFilename));
+		}
 	}
 
 	// TheSuperHackers @todo Implement ini load directory for map folder.
@@ -2197,7 +2205,15 @@ void GameLogic::loadMapINI( AsciiString mapName )
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading solo.ini"));
 		INI ini;
-		ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, nullptr );
+		// TheSuperHackers @bugfix A broken solo.ini in a custom map no longer crashes the game. Skip the rest of the file instead.
+		try
+		{
+			ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, nullptr );
+		}
+		catch (...)
+		{
+			DEBUG_LOG(("GameLogic::loadMapINI - Failed to parse '%s', ignoring the rest of it", fullFledgeFilename));
+		}
 	}
 
 	// No error here. There could've just *not* been a map.ini file.
