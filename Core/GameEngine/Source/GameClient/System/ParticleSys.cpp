@@ -2856,12 +2856,14 @@ void ParticleSystem::loadPostProcess()
 		// assign system
 		m_slaveSystem = TheParticleSystemManager->findParticleSystem( m_slaveSystemID );
 
-		// sanity
+		// TheSuperHackers @bugfix Do not fail loading the whole save game when the slave system was not saved.
+		// Destroyed systems are never saved, so a reference to one is simply dropped here.
 		if( m_slaveSystem == nullptr || m_slaveSystem->isDestroyed() == TRUE )
 		{
 
-			DEBUG_CRASH(( "ParticleSystem::loadPostProcess - m_slaveSystem is null or destroyed" ));
-			throw SC_INVALID_DATA;
+			DEBUG_LOG(( "ParticleSystem::loadPostProcess - m_slaveSystem is null or destroyed, dropping the reference" ));
+			m_slaveSystem = nullptr;
+			m_slaveSystemID = INVALID_PARTICLE_SYSTEM_ID;
 
 		}
 
@@ -2883,12 +2885,16 @@ void ParticleSystem::loadPostProcess()
 		// assign system
 		m_masterSystem = TheParticleSystemManager->findParticleSystem( m_masterSystemID );
 
-		// sanity
+		// TheSuperHackers @bugfix Do not fail loading the whole save game when the master system was not saved.
+		// A master system that already expired is kept alive until its slaves finish, but it is not saved
+		// because it is marked as destroyed. Let the orphaned slave finish its particles and go away instead.
 		if( m_masterSystem == nullptr || m_masterSystem->isDestroyed() == TRUE )
 		{
 
-			DEBUG_CRASH(( "ParticleSystem::loadPostProcess - m_masterSystem is null or destroyed" ));
-			throw SC_INVALID_DATA;
+			DEBUG_LOG(( "ParticleSystem::loadPostProcess - m_masterSystem is null or destroyed, destroying the slave system" ));
+			m_masterSystem = nullptr;
+			m_masterSystemID = INVALID_PARTICLE_SYSTEM_ID;
+			destroy();
 
 		}
 

@@ -152,8 +152,10 @@
 // but we cannot touch it much without breaking retail compatibility. Do not shy away from using massive hacks when fixing issues with AIGroup,
 // but put them behind this macro.
 
+// This build does not need to stay compatible with retail multiplayer games and replays,
+// so the reference counted AIGroup that fixes these memory errors is enabled by default.
 #ifndef RETAIL_COMPATIBLE_AIGROUP
-#define RETAIL_COMPATIBLE_AIGROUP (1) // AIGroup logic is expected to be CRC compatible with retail Generals 1.08, Zero Hour 1.04
+#define RETAIL_COMPATIBLE_AIGROUP (0) // AIGroup logic is expected to be CRC compatible with retail Generals 1.08, Zero Hour 1.04
 #endif
 
 #ifndef ENABLE_GAMETEXT_SUBSTITUTES
