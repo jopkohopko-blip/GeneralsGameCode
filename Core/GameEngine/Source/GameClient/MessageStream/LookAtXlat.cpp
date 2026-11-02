@@ -79,6 +79,16 @@ constexpr const Real SCROLL_AMT = 100.0f * SCROLL_MULTIPLIER;
 
 static const Int edgeScrollSize = 3;
 
+// @feature Smooth scrolling: fraction of the remaining velocity difference that is caught up per base frame (30 FPS).
+constexpr const Real SCROLL_ACCELERATION = 0.4f;
+constexpr const Real SCROLL_DECELERATION = 0.2f;
+// Below this velocity per base frame the glide out stops.
+constexpr const Real SCROLL_GLIDE_STOP_VELOCITY = 1.0f;
+
+// @feature The mouse wheel zoom step grows with the camera height, so the larger zoom range is quick to cross
+// and zooming feels the same close to the ground and far away from it.
+constexpr const Real WHEEL_ZOOM_MULTIPLIER = 1.5f;
+
 static Mouse::MouseCursor prevCursor = Mouse::ARROW;
 
 //-----------------------------------------------------------------------------
@@ -132,6 +142,89 @@ Bool LookAtTranslator::canScrollAtScreenEdge() const
 }
 
 //-----------------------------------------------------------------------------
+// Returns the scroll offset for this frame. The velocity eases toward the target velocity, so the camera
+// accelerates when scrolling starts and glides out when it stops.
+Coord2D LookAtTranslator::smoothScrollOffset(const Coord2D &targetOffset, Real fpsRatio)
+{
+	Coord2D offset = {0, 0};
+	if (fpsRatio <= 0.0f)
+		return offset;
+
+	Coord2D targetVelocity;
+	targetVelocity.x = targetOffset.x / fpsRatio;
+	targetVelocity.y = targetOffset.y / fpsRatio;
+
+	const Bool isStopping = targetVelocity.x == 0.0f && targetVelocity.y == 0.0f;
+	const Real catchUpPerBaseFrame = isStopping ? SCROLL_DECELERATION : SCROLL_ACCELERATION;
+	// Same easing regardless of the render frame rate.
+	const Real catchUp = 1.0f - powf(1.0f - catchUpPerBaseFrame, fpsRatio);
+
+	m_scrollVelocity.x += (targetVelocity.x - m_scrollVelocity.x) * catchUp;
+	m_scrollVelocity.y += (targetVelocity.y - m_scrollVelocity.y) * catchUp;
+
+	if (isStopping && m_scrollVelocity.length() < SCROLL_GLIDE_STOP_VELOCITY)
+	{
+		m_scrollVelocity.x = 0.0f;
+		m_scrollVelocity.y = 0.0f;
+	}
+
+	offset.x = m_scrollVelocity.x * fpsRatio;
+	offset.y = m_scrollVelocity.y * fpsRatio;
+	return offset;
+}
+
+//-----------------------------------------------------------------------------
+// Moves the camera so that the terrain grabbed with the middle mouse button stays under the cursor.
+// Both points are projected with the same camera transform, so the result does not depend on whether
+// the camera transform was already updated for the previous move.
+void LookAtTranslator::updateMiddleMouseDrag()
+{
+	if (m_currentPos.x == m_dragLastPos.x && m_currentPos.y == m_dragLastPos.y)
+		return;
+
+	Coord3D lastWorld, currentWorld;
+	if (TheTacticalView->screenToWorldAtZ(&m_dragLastPos, &lastWorld, m_dragHeight) == PlaneClass::NO_INTERSECTION)
+		return;
+	if (TheTacticalView->screenToWorldAtZ(&m_currentPos, &currentWorld, m_dragHeight) == PlaneClass::NO_INTERSECTION)
+		return;
+
+	Coord2D delta;
+	delta.x = lastWorld.x - currentWorld.x;
+	delta.y = lastWorld.y - currentWorld.y;
+
+	// Guard against huge jumps when the cursor points close to the horizon.
+	const Real maxDelta = TheTacticalView->getHeightAboveGround() * 4.0f + 100.0f;
+	if (delta.length() > maxDelta)
+	{
+		m_dragLastPos = m_currentPos;
+		return;
+	}
+
+	TheTacticalView->userMoveBy(&delta);
+	m_dragLastPos = m_currentPos;
+}
+
+//-----------------------------------------------------------------------------
+// The glide out must not fight the scripted camera or a camera jump, for example to a unit or a bookmark.
+Bool LookAtTranslator::canGlide() const
+{
+	if (!TheInGameUI->getInputEnabled())
+		return false;
+
+	if (TheTacticalView->isUserControlLocked() || TheTacticalView->isDoingScriptedCamera())
+		return false;
+
+	if (TheTacticalView->getCameraLock() != INVALID_ID || TheTacticalView->getCameraLockDrawable() != nullptr)
+		return false;
+
+	constexpr const Real MaxGlideViewDrift = 200.0f;
+	Coord2D drift = TheTacticalView->getPosition2D();
+	drift.x -= m_lastScrollViewPos.x;
+	drift.y -= m_lastScrollViewPos.y;
+	return drift.length() < MaxGlideViewDrift;
+}
+
+//-----------------------------------------------------------------------------
 LookAtTranslator::LookAtTranslator() :
 	m_isScrolling(false),
 	m_isRotating(false),
@@ -146,9 +239,15 @@ LookAtTranslator::LookAtTranslator() :
 	m_anchor.x = m_anchor.y = 0;
 	m_currentPos.x = m_currentPos.y = 0;
 	m_originalAnchor.x = m_originalAnchor.y = 0;
+	m_scrollVelocity.x = m_scrollVelocity.y = 0.0f;
+	m_lastScrollViewPos.x = m_lastScrollViewPos.y = 0.0f;
+	m_dragLastPos.x = m_dragLastPos.y = 0;
+	m_dragHeight = 0.0f;
 
 	OptionPreferences prefs;
 	m_screenEdgeScrollMode = prefs.getScreenEdgeScrollMode();
+	m_middleMouseScrollEnabled = prefs.getMiddleMouseScrollEnabled();
+	m_smoothScrollEnabled = prefs.getSmoothScrollEnabled();
 
 	DEBUG_ASSERTCRASH(!TheLookAtTranslator, ("Already have a LookAtTranslator - why do you need two?"));
 	TheLookAtTranslator = this;
@@ -289,11 +388,34 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 			m_lastMouseMoveTimeMsec = now;
 			m_middleButtonDownTimeMsec = now;
 
-			m_isRotating = true;
 			m_anchor = msg->getArgument( 0 )->pixel;
 			m_anchorAngle = TheTacticalView->getAngle();
 			m_originalAnchor = msg->getArgument( 0 )->pixel;
 			m_currentPos = msg->getArgument( 0 )->pixel;
+
+			// @feature Dragging with the middle mouse button pans the camera like grabbing the map.
+			// Alt + middle mouse button keeps the original rotation.
+			const Int modifiers = msg->getArgument( 1 )->integer;
+			const Bool isAltDown = (modifiers & (KEY_STATE_LALT | KEY_STATE_RALT)) != 0;
+			Bool startedDrag = false;
+
+			if (m_middleMouseScrollEnabled && !isAltDown && !TheInGameUI->isSelecting() && !m_isScrolling)
+			{
+				Coord3D grabbed;
+				if (TheTacticalView->screenToTerrain(&m_currentPos, &grabbed))
+				{
+					m_dragHeight = grabbed.z;
+					m_dragLastPos = m_currentPos;
+					m_scrollVelocity.x = m_scrollVelocity.y = 0.0f;
+					setScrolling(SCROLL_MMB);
+					startedDrag = m_isScrolling;
+				}
+			}
+
+			if (!startedDrag)
+			{
+				m_isRotating = true;
+			}
 			break;
 		}
 
@@ -307,6 +429,11 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 			const UnsignedInt PIXEL_OFFSET = 5;
 
 			m_isRotating = false;
+			if (m_scrollType == SCROLL_MMB)
+			{
+				stopScrolling();
+			}
+
 			Int dx = m_currentPos.x-m_originalAnchor.x;
 			if (dx<0) dx = -dx;
 			Int dy = m_currentPos.y-m_originalAnchor.y;
@@ -418,7 +545,14 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 			m_lastMouseMoveTimeMsec = timeGetTime();
 
 			const Real spin = msg->getArgument( 1 )->real;
-			const Real zoom = -spin * View::ZoomHeightPerSecond;
+			Real heightScale = 1.0f;
+			const Real defaultMaxHeight = TheTacticalView->getDefaultMaxHeightAboveGround();
+			if (defaultMaxHeight > 0.0f)
+			{
+				heightScale = TheTacticalView->getHeightAboveGround() / defaultMaxHeight;
+				heightScale = clamp(0.5f, heightScale, 3.0f);
+			}
+			const Real zoom = -spin * (Real)View::ZoomHeightPerSecond * WHEEL_ZOOM_MULTIPLIER * heightScale;
 			TheTacticalView->userZoom(zoom);
 
 			break;
@@ -442,6 +576,7 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 			if (m_isScrolling && !TheInGameUI->isScrolling())
 			{
 				// If we've been forced to stop scrolling (script action?)
+				m_scrollVelocity.x = m_scrollVelocity.y = 0.0f;
 				TheInGameUI->setScrollAmount(offset);
 				TheTacticalView->scrollBy(&offset);
 				stopScrolling();
@@ -503,6 +638,11 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 						}
 					}
 					break;
+				case SCROLL_MMB:
+					{
+						updateMiddleMouseDrag();
+					}
+					break;
 				case SCROLL_SCREENEDGE:
 					{
 						UnsignedInt height = TheDisplay->getHeight();
@@ -527,12 +667,33 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 					break;
 				}
 
+				if (m_smoothScrollEnabled && (m_scrollType == SCROLL_KEY || m_scrollType == SCROLL_SCREENEDGE))
+				{
+					offset = smoothScrollOffset(offset, fpsRatio);
+				}
+				else
+				{
+					m_scrollVelocity.x = m_scrollVelocity.y = 0.0f;
+				}
+
 				TheInGameUI->setScrollAmount(offset);
 				TheTacticalView->userScrollBy( &offset );
+				m_lastScrollViewPos = TheTacticalView->getPosition2D();
+			}
+			else if (m_smoothScrollEnabled && (m_scrollVelocity.x != 0.0f || m_scrollVelocity.y != 0.0f)
+				&& canGlide())
+			{
+				// @feature Glide out after keyboard or screen edge scrolling stopped.
+				const Coord2D zero = {0, 0};
+				offset = smoothScrollOffset(zero, TheFramePacer->getBaseOverUpdateFpsRatio());
+				TheInGameUI->setScrollAmount(zero);
+				TheTacticalView->userScrollBy(&offset);
+				m_lastScrollViewPos = TheTacticalView->getPosition2D();
 			}
 			else
 			{
 				//not scrolling so reset amount
+				m_scrollVelocity.x = m_scrollVelocity.y = 0.0f;
 				TheInGameUI->setScrollAmount(offset);
 				TheTacticalView->scrollBy(&offset);
 			}
@@ -771,6 +932,7 @@ GameMessageDisposition LookAtTranslator::translateGameMessage(const GameMessage 
 
 void LookAtTranslator::resetModes()
 {
+	m_scrollVelocity.x = m_scrollVelocity.y = 0.0f;
 	m_isScrolling = FALSE;
 	m_isRotating = FALSE;
 	m_isPitching = FALSE;
