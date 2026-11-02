@@ -886,6 +886,31 @@ Real OptionPreferences::getResolutionFontAdjustment()
 	return fontScale;
 }
 
+// TheSuperHackers @feature HealthBars = Selected | Damaged | Always
+static const char *const s_healthBarModeNames[HEALTH_BAR_MODE_COUNT] = { "Selected", "Damaged", "Always" };
+
+Int OptionPreferences::getHealthBarMode() const
+{
+	OptionPreferences::const_iterator it = find("HealthBars");
+	if (it == end())
+		return TheGlobalData->m_healthBarMode;
+
+	for (Int mode = 0; mode < HEALTH_BAR_MODE_COUNT; ++mode)
+	{
+		if (stricmp(it->second.str(), s_healthBarModeNames[mode]) == 0)
+			return mode;
+	}
+	return TheGlobalData->m_healthBarMode;
+}
+
+void OptionPreferences::setHealthBarMode( Int mode )
+{
+	if (mode < 0 || mode >= HEALTH_BAR_MODE_COUNT)
+		return;
+
+	(*this)["HealthBars"] = s_healthBarModeNames[mode];
+}
+
 Bool OptionPreferences::getShowMoneyPerMinute() const
 {
 	OptionPreferences::const_iterator it = find("ShowMoneyPerMinute");

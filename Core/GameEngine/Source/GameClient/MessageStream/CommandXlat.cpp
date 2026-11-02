@@ -38,6 +38,7 @@
 #include "Common/GameType.h"
 #include "Common/GameUtility.h"
 #include "Common/GlobalData.h"
+#include "Common/OptionPreferences.h"
 #include "Common/MessageStream.h"
 #include "Common/MiscAudio.h"
 #include "Common/MultiplayerSettings.h"
@@ -3480,6 +3481,33 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 				}
 				disp = DESTROY_MESSAGE;
 			}
+			break;
+		}
+
+		//-----------------------------------------------------------------------------------------
+		case GameMessage::MSG_META_TOGGLE_HEALTH_BARS:
+		{
+			// TheSuperHackers @feature Cycle the health bar mode and remember it in Options.ini.
+			const Int mode = (TheGlobalData->m_healthBarMode + 1) % HEALTH_BAR_MODE_COUNT;
+			TheWritableGlobalData->m_healthBarMode = mode;
+
+			OptionPreferences pref;
+			pref.setHealthBarMode( mode );
+			pref.write();
+
+			switch( mode )
+			{
+				case HEALTH_BAR_MODE_SELECTED:
+					TheInGameUI->messageNoFormat( TheGameText->FETCH_OR_SUBSTITUTE("GUI:HealthBarsSelected", L"Health bars: selected units only") );
+					break;
+				case HEALTH_BAR_MODE_DAMAGED:
+					TheInGameUI->messageNoFormat( TheGameText->FETCH_OR_SUBSTITUTE("GUI:HealthBarsDamaged", L"Health bars: damaged units") );
+					break;
+				default:
+					TheInGameUI->messageNoFormat( TheGameText->FETCH_OR_SUBSTITUTE("GUI:HealthBarsAlways", L"Health bars: always") );
+					break;
+			}
+			disp = DESTROY_MESSAGE;
 			break;
 		}
 

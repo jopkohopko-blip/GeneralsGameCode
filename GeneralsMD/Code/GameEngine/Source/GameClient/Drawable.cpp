@@ -3769,6 +3769,31 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 }
 
 // ------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Whether the health bar mode wants this drawable's health bar shown
+	* even though it is neither selected nor under the cursor. */
+// ------------------------------------------------------------------------------------------------
+Bool Drawable::isHealthBarAlwaysShown() const
+{
+	const Int mode = TheGlobalData->m_healthBarMode;
+	if( mode != HEALTH_BAR_MODE_DAMAGED && mode != HEALTH_BAR_MODE_ALWAYS )
+		return FALSE;
+
+	const Object *obj = getObject();
+	if( obj == nullptr || obj->isEffectivelyDead() || !obj->isSelectable() )
+		return FALSE;
+
+	if( !obj->isKindOf( KINDOF_STRUCTURE ) && !obj->isKindOf( KINDOF_INFANTRY ) && !obj->isKindOf( KINDOF_VEHICLE ) &&
+			!obj->isKindOf( KINDOF_AIRCRAFT ) )
+		return FALSE;
+
+	if( mode == HEALTH_BAR_MODE_ALWAYS )
+		return TRUE;
+
+	const BodyModuleInterface *body = obj->getBodyModule();
+	return body != nullptr && body->getHealth() < body->getMaxHealth();
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Draw health bar information for drawable */
 // ------------------------------------------------------------------------------------------------
 void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
@@ -3780,8 +3805,11 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 	// only draw health for selected drawables and drawables that have been moused over
 	// by the cursor
 	//
+	// TheSuperHackers @feature Depending on the health bar mode, also draw health for every
+	// damaged or every unit and structure in view.
+	//
 	if( TheGlobalData->m_showObjectHealth &&
-			(isSelected() || (TheInGameUI && (TheInGameUI->getMousedOverDrawableID() == getID()))) )
+			(isSelected() || (TheInGameUI && (TheInGameUI->getMousedOverDrawableID() == getID())) || isHealthBarAlwaysShown()) )
 	{
 		Object *obj = getObject();
 

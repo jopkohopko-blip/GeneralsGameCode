@@ -483,6 +483,7 @@ public:
 	// TheSuperHackers @feature Function to generate default key mappings
 	// for actions that were not found in a CommandMap.ini
 	void generateMetaMap();
+	Bool isKeyComboInUse(MappableKeyType key, MappableKeyModState modState) const; ///< TheSuperHackers @feature any meta map already bound to this key combo
 
 	void verifyMetaMap();
 

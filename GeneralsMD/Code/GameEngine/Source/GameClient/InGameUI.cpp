@@ -1109,6 +1109,7 @@ InGameUI::InGameUI()
 		m_placeIcon[ i ] = nullptr;
 	m_pendingPlaceType = nullptr;
 	m_pendingPlaceSourceObjectID = INVALID_ID;
+	m_placementQueued = FALSE;
 	m_preventLeftClickDeselectionInAlternateMouseModeForOneClick = FALSE;
 	m_placeAnchorStart.x = m_placeAnchorStart.y = 0;
 	m_placeAnchorEnd.x = m_placeAnchorEnd.y = 0;
@@ -3300,6 +3301,7 @@ void InGameUI::placeBuildAvailable( const ThingTemplate *build, Drawable *buildD
 	// place something, it is overwritten
 	//
 	m_pendingPlaceType = build;
+	m_placementQueued = FALSE;
 
 	//Keep the prev pending place for left click deselection prevention in alternate mouse mode.
 	//We want to keep our dozer selected after initiating construction.

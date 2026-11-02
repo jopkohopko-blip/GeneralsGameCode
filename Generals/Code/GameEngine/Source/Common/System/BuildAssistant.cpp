@@ -319,7 +319,8 @@ void BuildAssistant::xferTheSellList( Xfer *xfer )
 /** Nice little method to wrap up creating an object from a build */
 //-------------------------------------------------------------------------------------------------
 Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTemplate *what,
-																			  const Coord3D *pos, Real angle, Player *owningPlayer )
+																			  const Coord3D *pos, Real angle, Player *owningPlayer,
+																			  Bool queueIfBusy )
 {
 
 	// sanity
@@ -361,6 +362,7 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 
 		if( ai )
 		{
+			(void)queueIfBusy; // TheSuperHackers @todo Shift build queue is only implemented for Zero Hour
 			ai->aiIdle(CMD_FROM_AI); // stop any current behavior.
 			return ai->construct( what, pos, angle, owningPlayer, FALSE );
 		}
