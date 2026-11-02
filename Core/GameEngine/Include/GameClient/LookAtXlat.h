@@ -66,7 +66,8 @@ private:
 		SCROLL_NONE = 0,
 		SCROLL_RMB,
 		SCROLL_KEY,
-		SCROLL_SCREENEDGE
+		SCROLL_SCREENEDGE,
+		SCROLL_MMB				// drag the map with the middle mouse button
 	};
 	ICoord2D m_anchor;
 	ICoord2D m_originalAnchor;
@@ -83,10 +84,19 @@ private:
 	ScrollType m_scrollType;
 	ScreenEdgeScrollMode m_screenEdgeScrollMode;
 	UnsignedInt m_lastMouseMoveTimeMsec;				// real-time in milliseconds when mouse last moved
+	Coord2D m_scrollVelocity;					// smoothed keyboard and screen edge scroll velocity, per base frame
+	Coord2D m_lastScrollViewPos;			// view position after the last smoothed scroll step, to detect camera jumps
+	ICoord2D m_dragLastPos;						// mouse position of the last middle mouse button map drag update
+	Real m_dragHeight;								// world height of the terrain grabbed with the middle mouse button
+	Bool m_middleMouseScrollEnabled;	// middle mouse button drags the map, Alt + middle mouse button rotates
+	Bool m_smoothScrollEnabled;				// keyboard and screen edge scrolling accelerate and glide out
 
 	void setScrolling( ScrollType scrollType );
 	void stopScrolling();
 	Bool canScrollAtScreenEdge() const;
+	Coord2D smoothScrollOffset(const Coord2D &targetOffset, Real fpsRatio);
+	void updateMiddleMouseDrag();
+	Bool canGlide() const;
 };
 
 extern LookAtTranslator *TheLookAtTranslator;

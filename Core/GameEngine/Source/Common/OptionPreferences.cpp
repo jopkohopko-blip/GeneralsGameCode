@@ -282,6 +282,41 @@ Bool OptionPreferences::getDrawScrollAnchor()
 	return FALSE;
 }
 
+// @feature How much further than the original game the camera can zoom out. 1.0 is the original range.
+Real OptionPreferences::getCameraZoomOutScale() const
+{
+	constexpr const Real DefaultScale = 1.6f;
+	OptionPreferences::const_iterator it = find("CameraZoomOutScale");
+	if (it == end())
+		return DefaultScale;
+
+	const Real scale = (Real)atof(it->second.str());
+	if (scale <= 0.0f)
+		return DefaultScale;
+
+	return clamp(1.0f, scale, 3.0f);
+}
+
+// @feature Dragging with the middle mouse button pans the camera. Rotating then needs Alt + middle mouse button.
+Bool OptionPreferences::getMiddleMouseScrollEnabled() const
+{
+	OptionPreferences::const_iterator it = find("MiddleMouseScroll");
+	if (it == end())
+		return TRUE;
+
+	return stricmp(it->second.str(), "yes") == 0;
+}
+
+// @feature Keyboard and screen edge scrolling accelerate and glide out smoothly.
+Bool OptionPreferences::getSmoothScrollEnabled() const
+{
+	OptionPreferences::const_iterator it = find("SmoothScroll");
+	if (it == end())
+		return TRUE;
+
+	return stricmp(it->second.str(), "yes") == 0;
+}
+
 Bool OptionPreferences::getMoveScrollAnchor()
 {
 	OptionPreferences::const_iterator it = find("MoveScrollAnchor");
