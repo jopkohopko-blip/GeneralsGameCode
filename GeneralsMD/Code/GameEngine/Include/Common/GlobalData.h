@@ -125,6 +125,8 @@ public:
 	Bool m_headless;
 
 	Bool m_windowed;
+	Bool m_borderless; ///< @feature Windowed without a frame, covering the monitor when the resolution matches it
+	Bool m_windowModeFromCommandLine; ///< @feature TRUE when -win, -fullscreen or -borderless was passed
 	Int m_xResolution;
 	Int m_yResolution;
 	Int m_maxShellScreens;  ///< this many shells layouts can be loaded at once

@@ -67,6 +67,39 @@ Bool OptionPreferences::loadFromIniFile()
 	return load("Options.ini");
 }
 
+OptionPreferences::WindowMode OptionPreferences::getWindowMode() const
+{
+	OptionPreferences::const_iterator it = find("WindowMode");
+	if (it == end())
+		return WindowMode_Borderless;
+
+	if (stricmp(it->second.str(), "Fullscreen") == 0)
+		return WindowMode_Fullscreen;
+	if (stricmp(it->second.str(), "Windowed") == 0)
+		return WindowMode_Windowed;
+	if (stricmp(it->second.str(), "Borderless") == 0)
+		return WindowMode_Borderless;
+
+	return WindowMode_Borderless;
+}
+
+void OptionPreferences::setWindowMode(WindowMode mode)
+{
+	static const char *const names[] = { "Fullscreen", "Windowed", "Borderless" };
+	static_assert(ARRAY_SIZE(names) == WindowMode_Count, "Incorrect array size");
+
+	if (mode < 0 || mode >= WindowMode_Count)
+		mode = WindowMode_Borderless;
+
+	(*this)["WindowMode"] = names[mode];
+}
+
+void OptionPreferences::applyWindowModeToGlobalData(WindowMode mode)
+{
+	TheWritableGlobalData->m_windowed = (mode != WindowMode_Fullscreen);
+	TheWritableGlobalData->m_borderless = (mode == WindowMode_Borderless);
+}
+
 WW3D::MultiSampleModeEnum OptionPreferences::getAntiAliasing() const
 {
 	OptionPreferences::const_iterator it = find("AntiAliasing");
