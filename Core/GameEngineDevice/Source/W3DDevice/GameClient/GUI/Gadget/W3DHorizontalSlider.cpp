@@ -50,6 +50,7 @@
 #include "GameClient/GameWindowGlobal.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetSlider.h"
+#include "GameClient/GUILayout.h"
 #include "W3DDevice/GameClient/W3DGadget.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 
@@ -150,7 +151,7 @@ void W3DGadgetHorizontalSliderImageDraw( GameWindow *window,
 
 	SliderData *s = (SliderData *)window->winGetUserData();
 
-	Real xMulti = INT_TO_REAL(TheDisplay->getWidth()) / DEFAULT_DISPLAY_WIDTH;
+	Real xMulti = gui::getDefaultLayoutTransform().scaleX;
 
 	// figure out how many boxes we draw for this slider
 	Int numBoxes = 0;

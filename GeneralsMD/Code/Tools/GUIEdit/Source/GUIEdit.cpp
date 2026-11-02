@@ -93,6 +93,7 @@
 #include "EditWindow.h"
 #include "GUIEditWindowManager.h"
 #include "GUIEditDisplay.h"
+#include "GameClient/GUILayout.h"
 #include "DialogProc.h"
 #include "LayoutScheme.h"
 
@@ -570,6 +571,9 @@ void GUIEdit::init()
 	TheEditWindow->getSize( &size );
 	TheDisplay->setWidth( size.x );
 	TheDisplay->setHeight( size.y );
+
+	// layouts are edited in screen space, so they must not be offset or uniformly scaled
+	gui::setUniformScalingEnabled( FALSE );
 
 	// set our initial mode
 	setMode( MODE_EDIT );
