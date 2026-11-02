@@ -2618,8 +2618,15 @@ void AIGroup::groupCreateFormation( CommandSourceType cmdSource )				///< Create
 void AIGroup::groupDoSpecialPower( UnsignedInt specialPowerID, UnsignedInt commandOptions )
 {
 	//This is the no target, no position version.
-	std::list<Object *>::iterator i;
-	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
+#if !RETAIL_COMPATIBLE_AIGROUP
+	// Defer deletion until the end of this function.
+	AIGroupPtr refThis(this);
+#endif
+
+	// TheSuperHackers @bugfix Executing a special power can remove members from this group or destroy the group,
+	// for example when deselecting objects, which invalidates the member list iterator. Iterate over a copy instead.
+	std::vector<Object *> groupObjectsCopy(m_memberList.begin(), m_memberList.end());
+	for( std::vector<Object *>::iterator i = groupObjectsCopy.begin(); i != groupObjectsCopy.end(); ++i )
 	{
 		//Special powers do a lot of different things, but the top level stuff doesn't use
 		//ai interface code. It finds the special power module and calls it directly for each object.
@@ -2656,8 +2663,15 @@ void AIGroup::groupDoSpecialPower( UnsignedInt specialPowerID, UnsignedInt comma
 void AIGroup::groupDoSpecialPowerAtLocation( UnsignedInt specialPowerID, const Coord3D *location, Real angle, const Object *objectInWay, UnsignedInt commandOptions )
 {
 	//This one requires a position
-	std::list<Object *>::iterator i;
-	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
+#if !RETAIL_COMPATIBLE_AIGROUP
+	// Defer deletion until the end of this function.
+	AIGroupPtr refThis(this);
+#endif
+
+	// TheSuperHackers @bugfix Executing a special power can remove members from this group or destroy the group,
+	// for example when deselecting objects, which invalidates the member list iterator. Iterate over a copy instead.
+	std::vector<Object *> groupObjectsCopy(m_memberList.begin(), m_memberList.end());
+	for( std::vector<Object *>::iterator i = groupObjectsCopy.begin(); i != groupObjectsCopy.end(); ++i )
 	{
 		//Special powers do a lot of different things, but the top level stuff doesn't use
 		//ai interface code. It finds the special power module and calls it directly for each object.
@@ -2695,8 +2709,15 @@ void AIGroup::groupDoSpecialPowerAtLocation( UnsignedInt specialPowerID, const C
 void AIGroup::groupDoSpecialPowerAtObject( UnsignedInt specialPowerID, Object *target, UnsignedInt commandOptions )
 {
 	//This one requires a target
-	std::list<Object *>::iterator i;
-	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
+#if !RETAIL_COMPATIBLE_AIGROUP
+	// Defer deletion until the end of this function.
+	AIGroupPtr refThis(this);
+#endif
+
+	// TheSuperHackers @bugfix Executing a special power can remove members from this group or destroy the group,
+	// for example when deselecting objects, which invalidates the member list iterator. Iterate over a copy instead.
+	std::vector<Object *> groupObjectsCopy(m_memberList.begin(), m_memberList.end());
+	for( std::vector<Object *>::iterator i = groupObjectsCopy.begin(); i != groupObjectsCopy.end(); ++i )
 	{
 		//Special powers do a lot of different things, but the top level stuff doesn't use
 		//ai interface code. It finds the special power module and calls it directly for each object.
