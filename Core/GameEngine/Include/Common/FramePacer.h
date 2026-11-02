@@ -69,7 +69,14 @@ public:
 
 	Real getLogicFramePhase() const; ///< Get how far the current render step reaches into the current logic frame, in [0,1]. Used to interpolate render updates between logic updates.
 
+	// @feature The render frame rate is no longer locked to the game speed.
+	static Int getDisplayRefreshRate(); ///< Get the refresh rate of the primary display, or 60 if it is unknown.
+	void setDefaultLimits( Int gameSpeedFps ); ///< Render at the display refresh rate and run the simulation at the given game speed fps.
+	void setGameSpeedFps( Int gameSpeedFps ); ///< Run the simulation at the given game speed fps without locking the render fps to it.
+
 protected:
+
+	Bool isFastForwarding() const; ///< Returns whether the game is fast forwarding, for example in a skipped scripted sequence.
 
 	FrameRateLimit m_frameRateLimit;
 

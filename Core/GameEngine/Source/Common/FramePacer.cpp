@@ -107,10 +107,7 @@ Bool FramePacer::isActualFramesPerSecondLimitEnabled() const
 {
 	Bool allowFpsLimit = true;
 
-	if (TheTacticalView != nullptr)
-	{
-		allowFpsLimit &= TheTacticalView->getTimeMultiplier()<=1 && !TheScriptEngine->isTimeFast();
-	}
+	allowFpsLimit &= !isFastForwarding();
 
 	if (TheGameLogic != nullptr)
 	{
@@ -206,7 +203,8 @@ Int FramePacer::getActualLogicTimeScaleFps(LogicTimeQueryFlags flags) const
 		return TheNetwork->getFrameRate();
 	}
 
-	if (isLogicTimeScaleEnabled())
+	// The logic time scale must not slow down fast forwarding, which runs one logic frame per render frame.
+	if (isLogicTimeScaleEnabled() && !isFastForwarding())
 	{
 		return getLogicTimeScaleFps();
 	}
@@ -239,4 +237,57 @@ Real FramePacer::getLogicTimeStepMilliseconds(LogicTimeQueryFlags flags) const
 Real FramePacer::getLogicFramePhase() const
 {
 	return m_logicFramePhase;
+}
+
+Bool FramePacer::isFastForwarding() const
+{
+	if (TheTacticalView != nullptr)
+	{
+		return TheTacticalView->getTimeMultiplier() > 1 || TheScriptEngine->isTimeFast();
+	}
+	return false;
+}
+
+Int FramePacer::getDisplayRefreshRate()
+{
+	Int refreshRate = 0;
+#ifdef _WIN32
+	DEVMODE devMode;
+	memset(&devMode, 0, sizeof(devMode));
+	devMode.dmSize = sizeof(devMode);
+	if (EnumDisplaySettings(nullptr, ENUM_CURRENT_SETTINGS, &devMode))
+	{
+		refreshRate = (Int)devMode.dmDisplayFrequency;
+	}
+#endif
+	// Values of 0 or 1 mean the hardware default refresh rate.
+	if (refreshRate <= 1)
+	{
+		refreshRate = 60;
+	}
+	return refreshRate;
+}
+
+// @feature The render frame rate is now the display refresh rate and the game speed is kept by the logic time scale.
+// Before, the render frame rate was locked to the game speed of 30 fps. Drawables, particles and the camera
+// interpolate between logic frames, so higher render frame rates look smoother without changing the game speed.
+void FramePacer::setDefaultLimits( Int gameSpeedFps )
+{
+	setFramesPerSecondLimit(std::max(getDisplayRefreshRate(), gameSpeedFps));
+	setGameSpeedFps(gameSpeedFps);
+}
+
+void FramePacer::setGameSpeedFps( Int gameSpeedFps )
+{
+	if (gameSpeedFps < 1)
+	{
+		gameSpeedFps = LOGICFRAMES_PER_SECOND;
+	}
+	// The logic time scale is capped by the render fps, so allow faster game speeds to raise the render fps.
+	if (getFramesPerSecondLimit() < gameSpeedFps)
+	{
+		setFramesPerSecondLimit(gameSpeedFps);
+	}
+	setLogicTimeScaleFps(gameSpeedFps);
+	enableLogicTimeScale(TRUE);
 }

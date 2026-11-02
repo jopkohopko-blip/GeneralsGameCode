@@ -888,7 +888,8 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 		if (maxFPS < 1 || maxFPS > 1000)
 			maxFPS = TheGlobalData->m_framesPerSecondLimit;
 		DEBUG_LOG(("Setting max FPS limit to %d FPS", maxFPS));
-		TheFramePacer->setFramesPerSecondLimit(maxFPS);
+		// @feature The skirmish game speed now sets the simulation speed instead of the render fps limit.
+		TheFramePacer->setGameSpeedFps(maxFPS);
 		TheWritableGlobalData->m_useFpsLimit = true;
 	}
 
