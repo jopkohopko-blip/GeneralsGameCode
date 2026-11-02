@@ -66,7 +66,17 @@ if(MINGW)
         uuid        # COM GUIDs
         vfw32       # Video for Windows (AVIFile functions)
         winmm       # Multimedia (timeGetTime, etc.)
+        ws2_32      # Winsock 2 (WWDownload FTP, networking)
+        wsock32     # Winsock 1
     )
+
+    # The game engine and game engine device static libraries reference each other.
+    # Unlike MSVC, GNU ld resolves static libraries in a single pass, so wrap the
+    # libraries of executables in a group to let the linker rescan them.
+    foreach(lang C CXX)
+        string(REPLACE "<LINK_LIBRARIES>" "-Wl,--start-group <LINK_LIBRARIES> -Wl,--end-group"
+            CMAKE_${lang}_LINK_EXECUTABLE "${CMAKE_${lang}_LINK_EXECUTABLE}")
+    endforeach()
 
     # Note: MinGW-w64 does not provide comsuppw (COM support utilities library).
     # COM support utilities (_com_util::ConvertStringToBSTR, ConvertBSTRToString)
