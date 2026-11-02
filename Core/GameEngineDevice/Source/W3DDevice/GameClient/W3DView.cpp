@@ -197,6 +197,30 @@ W3DView::~W3DView()
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Returns the horizontal field of view for a view that covers the whole display.
+	* The game was designed for a 50 degree horizontal fov on 4:3 displays. On wider displays the
+	* vertical fov of the 4:3 view is kept and the horizontal fov is widened (Hor+). Displays that
+	* are 4:3 or narrower keep the original 50 degrees. */
+//-------------------------------------------------------------------------------------------------
+Real W3DView::getFullScreenHorizontalFOV()
+{
+	constexpr const Real DesignHorizontalFOV = DEG_TO_RADF(50.0f);
+	constexpr const Real DesignAspectRatio = 4.0f / 3.0f;
+
+	const Real displayWidth = (Real)TheDisplay->getWidth();
+	const Real displayHeight = (Real)TheDisplay->getHeight();
+	if (displayWidth <= 0.0f || displayHeight <= 0.0f)
+		return DesignHorizontalFOV;
+
+	const Real aspectRatio = displayWidth / displayHeight;
+	if (aspectRatio <= DesignAspectRatio)
+		return DesignHorizontalFOV;
+
+	const Real halfWidth = tanf(DesignHorizontalFOV * 0.5f) * (aspectRatio / DesignAspectRatio);
+	return 2.0f * atanf(halfWidth);
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Sets the height of the viewport, while maintaining original camera perspective. */
 //-------------------------------------------------------------------------------------------------
 void W3DView::setHeight(Int height)
@@ -233,7 +257,9 @@ void W3DView::setWidth(Int width)
 
 	//we want to maintain the same scale, so we'll need to adjust the fov.
 	//default W3D fov for full-screen is 50 degrees.
-	m_3DCamera->Set_View_Plane((Real)width/(Real)TheDisplay->getWidth()*DEG_TO_RADF(50.0f),-1);
+	// Widescreen: the full-screen horizontal fov now grows with the display aspect ratio (Hor+),
+	// so that wide displays see more to the sides instead of losing the top and bottom of the 4:3 view.
+	m_3DCamera->Set_View_Plane((Real)width/(Real)TheDisplay->getWidth()*getFullScreenHorizontalFOV(),-1);
 
 	m_cameraAreaConstraintsValid = false;
 	m_recalcCamera = true;
