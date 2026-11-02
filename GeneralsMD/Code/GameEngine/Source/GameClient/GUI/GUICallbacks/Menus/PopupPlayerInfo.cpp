@@ -48,6 +48,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/Display.h"
 #include "GameClient/MessageBox.h"
+#include "GameClient/GUILayout.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
@@ -469,8 +470,9 @@ void ResetBattleHonorInsertion()
 }
 void InsertBattleHonor(GameWindow *list, const Image *image, Bool enabled, Int itemData, Int& row, Int& column, UnicodeString text = UnicodeString::TheEmptyString, Int extra = 0)
 {
-	Int width = MAX_BATTLE_HONOR_IMAGE_WIDTH * (TheDisplay->getWidth() / (Real)DEFAULT_DISPLAY_WIDTH);
-	Int height = MAX_BATTLE_HONOR_IMAGE_HEIGHT * (TheDisplay->getHeight() / (Real)DEFAULT_DISPLAY_HEIGHT);
+	const gui::LayoutTransform layout = gui::getDefaultLayoutTransform();
+	Int width = MAX_BATTLE_HONOR_IMAGE_WIDTH * layout.scaleX;
+	Int height = MAX_BATTLE_HONOR_IMAGE_HEIGHT * layout.scaleY;
 
 	static Int enabledColor = 0xFFFFFFFF;
 	static Int disabledColor = GameMakeColor(80, 80, 80, 255);

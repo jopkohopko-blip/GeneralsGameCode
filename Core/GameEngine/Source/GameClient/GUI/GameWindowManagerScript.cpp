@@ -69,6 +69,7 @@
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/GameText.h"
+#include "GameClient/GUILayout.h"
 #include "GameClient/HeaderTemplate.h"
 
 
@@ -523,6 +524,53 @@ static Bool parseTooltip( const char *token, WinInstanceData *instData,
 
 }
 
+// TheSuperHackers @feature The layout transform of the top level window that is currently being
+// parsed. Child windows use the transform of their top level window, so that a whole layout is
+// scaled and anchored as one piece.
+static gui::LayoutTransform s_layoutTransform;
+
+// The name of the layout file that is currently being parsed, in lower case.
+static AsciiString s_layoutFilename;
+
+//-------------------------------------------------------------------------------------------------
+/** Picks how a top level window is placed on the display. The windows were authored for 4:3, so
+	* by default they are scaled uniformly and centered. Windows that cover the whole creation
+	* resolution keep covering the whole display, so that their background and their input
+	* blocking still fill the screen, while their children are centered. Returns TRUE for such
+	* windows. The transform for the window and its children is written to 'transform'. */
+//-------------------------------------------------------------------------------------------------
+static Bool getTopLevelWindowLayout( const IRegion2D &region, const ICoord2D &createRes,
+																		 gui::LayoutTransform *transform )
+{
+	constexpr const Int edgeTolerance = 4;
+	const Bool coversWidth = region.lo.x <= edgeTolerance && region.hi.x >= createRes.x - edgeTolerance;
+	const Bool coversHeight = region.lo.y <= edgeTolerance && region.hi.y >= createRes.y - edgeTolerance;
+
+	gui::LayoutAnchor anchorX = gui::LayoutAnchor_Center;
+	gui::LayoutAnchor anchorY = gui::LayoutAnchor_Center;
+
+	if( coversWidth && coversHeight && gui::isUniformScalingEnabled() )
+	{
+		*transform = gui::getDefaultLayoutTransform( createRes.x, createRes.y );
+		return TRUE;
+	}
+
+	if( strstr( s_layoutFilename.str(), "controlbar.wnd" ) != nullptr )
+	{
+		// The Control Bar sits at the bottom center of the display.
+		anchorY = gui::LayoutAnchor_Max;
+	}
+	else if( strstr( s_layoutFilename.str(), "genpowersshortcutbar" ) != nullptr )
+	{
+		// The General's powers shortcut bar sticks to the right edge of the display.
+		anchorX = gui::LayoutAnchor_Max;
+		anchorY = gui::LayoutAnchor_Min;
+	}
+
+	*transform = gui::getLayoutTransform( createRes.x, createRes.y, anchorX, anchorY );
+	return FALSE;
+}
+
 // parseScreenRect ============================================================
 /** Parse the screen rect entry which tells us the position and size
 	* of window.  Note we scale for the current resolution if needed
@@ -560,12 +608,29 @@ static Bool parseScreenRect( const char *token, char *buffer,
 	// shrink or expand the screen region by the ratio of the current
 	// resolution divided by the creation resolution
 	//
-	Real xScale = (Real)TheDisplay->getWidth() / (Real)createRes.x;
-	Real yScale = (Real)TheDisplay->getHeight() / (Real)createRes.y;
-	screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * xScale);
-	screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * yScale);
-	screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * xScale);
-	screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * yScale);
+	// TheSuperHackers @feature The region is scaled uniformly and anchored on the display instead
+	// of being stretched, unless uniform scaling is disabled.
+	//
+	Bool fillsDisplay = FALSE;
+	if( parent == nullptr )
+		fillsDisplay = getTopLevelWindowLayout( screenRegion, createRes, &s_layoutTransform );
+
+	const gui::LayoutTransform &transform = s_layoutTransform;
+	if( fillsDisplay )
+	{
+		// This window fills the display, its children are placed with the centered transform.
+		screenRegion.lo.x = 0;
+		screenRegion.lo.y = 0;
+		screenRegion.hi.x = (Int)TheDisplay->getWidth();
+		screenRegion.hi.y = (Int)TheDisplay->getHeight();
+	}
+	else
+	{
+		screenRegion.lo.x = transform.toScreenX( (Real)screenRegion.lo.x );
+		screenRegion.lo.y = transform.toScreenY( (Real)screenRegion.lo.y );
+		screenRegion.hi.x = transform.toScreenX( (Real)screenRegion.hi.x );
+		screenRegion.hi.y = transform.toScreenY( (Real)screenRegion.hi.y );
+	}
 
 	//
 	// given the screen region upper left compute the upper left that we
@@ -2748,6 +2813,10 @@ GameWindow *GameWindowManager::winCreateFromScript( AsciiString filenameString,
   // Reset the window stack
   resetWindowStack();
 	resetWindowDefaults();
+
+	// remember the layout name, some layouts are anchored to the display edges
+	s_layoutFilename = filenameString;
+	s_layoutFilename.toLower();
 
 	//
 	// get the filename from the parameter, if it doesn't contain a '\' it is

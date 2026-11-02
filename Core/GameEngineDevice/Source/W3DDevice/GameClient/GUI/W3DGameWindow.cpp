@@ -49,6 +49,8 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "GameClient/Gadget.h"
 #include "GameClient/GameWindowGlobal.h"
+#include "GameClient/GUILayout.h"
+#include "GameClient/Image.h"
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "W3DDevice/GameClient/W3DGameWindowManager.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
@@ -281,6 +283,55 @@ W3DGameWindow::~W3DGameWindow()
 
 }
 
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Full screen backgrounds, like the loading screens, were painted for
+	* 4:3. When a top level window covers the whole display and its image has a 4:3 like aspect
+	* ratio, the image is drawn undistorted with black bars instead of being stretched. Returns
+	* FALSE if the image should be drawn as usual. */
+//-------------------------------------------------------------------------------------------------
+static Bool drawFullScreenImageWithAspect( GameWindow *window, const Image *image,
+																					 const ICoord2D &start, const ICoord2D &end )
+{
+	if( window->winGetParent() != nullptr || !gui::isUniformScalingEnabled() )
+		return FALSE;
+
+	const Int displayWidth = (Int)TheDisplay->getWidth();
+	const Int displayHeight = (Int)TheDisplay->getHeight();
+	if( start.x > 0 || start.y > 0 || end.x < displayWidth || end.y < displayHeight )
+		return FALSE;
+
+	if( image->getImageWidth() <= 0 || image->getImageHeight() <= 0 )
+		return FALSE;
+
+	const Real imageAspect = (Real)image->getImageWidth() / (Real)image->getImageHeight();
+	if( imageAspect < 1.2f || imageAspect > 1.45f )
+		return FALSE;
+
+	const Real scale = min( displayWidth / (Real)image->getImageWidth(), displayHeight / (Real)image->getImageHeight() );
+	const Int width = (Int)(image->getImageWidth() * scale);
+	const Int height = (Int)(image->getImageHeight() * scale);
+	if( width >= displayWidth - 1 && height >= displayHeight - 1 )
+		return FALSE;
+
+	const Int x = (displayWidth - width) / 2;
+	const Int y = (displayHeight - height) / 2;
+	const Color black = GameMakeColor( 0, 0, 0, 255 );
+
+	if( x > 0 )
+	{
+		TheWindowManager->winFillRect( black, 0, 0, 0, x, displayHeight );
+		TheWindowManager->winFillRect( black, 0, x + width, 0, displayWidth, displayHeight );
+	}
+	if( y > 0 )
+	{
+		TheWindowManager->winFillRect( black, 0, 0, 0, displayWidth, y );
+		TheWindowManager->winFillRect( black, 0, 0, y + height, displayWidth, displayHeight );
+	}
+
+	TheWindowManager->winDrawImage( image, x, y, x + width, y + height );
+	return TRUE;
+}
+
 // W3DGameWinDefaultDraw ======================================================
 /** The default redraw callback.  Draws the background using either
 	* the drawData or the background color unless the background color
@@ -328,7 +379,8 @@ void W3DGameWinDefaultDraw( GameWindow *window, WinInstanceData *instData )
 			start.y = origin.y + instData->m_imageOffset.y;
 			end.x = start.x + size.x;
 			end.y = start.y + size.y;
-			TheWindowManager->winDrawImage( image, start.x, start.y, end.x, end.y );
+			if( !drawFullScreenImageWithAspect( window, image, start, end ) )
+				TheWindowManager->winDrawImage( image, start.x, start.y, end.x, end.y );
 
 		}
 

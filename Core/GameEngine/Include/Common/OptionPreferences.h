@@ -127,6 +127,7 @@ public:
 	Int getPlayerInfoListFontSize();
 
 	Real getResolutionFontAdjustment();
+	Bool getUniformUIScalingEnabled() const;
 
 	Bool getShowMoneyPerMinute() const;
 

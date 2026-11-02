@@ -272,8 +272,11 @@ public:
 	void preloadAssets( TimeOfDay timeOfDay );									///< preload the assets
 
 private:
+	void updateLayout( const ControlBarScheme *scheme );			///< computes the scale and origin used to draw the scheme
+
 	ControlBarScheme *m_currentScheme;													///< the current scheme that everythign uses
 	Coord2D m_multiplier;
+	ICoord2D m_origin;																					///< screen position of the scheme's (0,0) coordinate
 
 	typedef std::list< ControlBarScheme* > ControlBarSchemeList;			///< list of control bar schemes
 	ControlBarSchemeList m_schemeList;

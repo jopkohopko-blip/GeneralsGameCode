@@ -886,6 +886,21 @@ Real OptionPreferences::getResolutionFontAdjustment()
 	return fontScale;
 }
 
+// TheSuperHackers @feature The GUI keeps its aspect ratio on displays that are not 4:3, unless
+// 'UniformUIScaling = no' restores the original stretching.
+Bool OptionPreferences::getUniformUIScalingEnabled() const
+{
+	OptionPreferences::const_iterator it = find("UniformUIScaling");
+	if (it == end())
+		return TRUE;
+
+	if (stricmp(it->second.str(), "no") == 0)
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
 Bool OptionPreferences::getShowMoneyPerMinute() const
 {
 	OptionPreferences::const_iterator it = find("ShowMoneyPerMinute");
