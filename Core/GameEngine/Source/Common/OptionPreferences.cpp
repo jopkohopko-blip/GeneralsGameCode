@@ -752,7 +752,20 @@ void OptionPreferences::getResolution(Int *xres, Int *yres)
 
 	OptionPreferences::const_iterator it = find("Resolution");
 	if (it == end())
+	{
+#ifdef _WIN32
+		// @feature Without a saved resolution the game now starts at the desktop resolution
+		// instead of 800 x 600. The display falls back to a safe mode if the device rejects it.
+		const Int desktopXRes = GetSystemMetrics(SM_CXSCREEN);
+		const Int desktopYRes = GetSystemMetrics(SM_CYSCREEN);
+		if (desktopXRes >= DEFAULT_DISPLAY_WIDTH && desktopYRes >= DEFAULT_DISPLAY_HEIGHT)
+		{
+			*xres = desktopXRes;
+			*yres = desktopYRes;
+		}
+#endif
 		return;
+	}
 
 	Int selectedXRes,selectedYRes;
 	if (sscanf(it->second.str(),"%d%d", &selectedXRes, &selectedYRes) != 2)
