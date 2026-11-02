@@ -1908,8 +1908,12 @@ bool GameLogic::onDozerConstruct(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &curr
 
 	if( msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )
 	{
+		// TheSuperHackers @feature The optional 4th argument asks to queue the build behind the
+		// builder's current construction (placed with Shift held).
+		const Bool queueIfBusy = msg->getArgumentCount() >= 4 && msg->getArgument( 3 )->boolean;
+
 		TheBuildAssistant->buildObjectNow( constructorObject, place, &loc, angle,
-																				constructorObject->getControllingPlayer() );
+																				constructorObject->getControllingPlayer(), queueIfBusy );
 	}
 	else
 	{

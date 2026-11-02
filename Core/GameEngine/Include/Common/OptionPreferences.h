@@ -146,6 +146,8 @@ public:
 	Bool getUniformUIScalingEnabled() const;
 
 	Bool getShowMoneyPerMinute() const;
+	Int getHealthBarMode() const;
+	void setHealthBarMode( Int mode );
 
 	Real getGameWindowTransitionSpeedMultiplier() const;
 };

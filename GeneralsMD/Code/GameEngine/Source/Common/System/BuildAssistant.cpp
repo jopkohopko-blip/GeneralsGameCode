@@ -49,6 +49,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -319,7 +320,8 @@ void BuildAssistant::xferTheSellList( Xfer *xfer )
 /** Nice little method to wrap up creating an object from a build */
 //-------------------------------------------------------------------------------------------------
 Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTemplate *what,
-																			  const Coord3D *pos, Real angle, Player *owningPlayer )
+																			  const Coord3D *pos, Real angle, Player *owningPlayer,
+																			  Bool queueIfBusy )
 {
 
 	// sanity
@@ -361,8 +363,13 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 
 		if( ai )
 		{
-			ai->aiIdle(CMD_FROM_AI); // stop any current behavior.
-			return ai->construct( what, pos, angle, owningPlayer, FALSE );
+			// TheSuperHackers @feature Shift build queue. A queued build must not interrupt the dozer
+			// while it is busy with another dozer task.
+			DozerAIInterface *dozerAI = ai->getDozerAIInterface();
+			const Bool keepCurrentTask = queueIfBusy && dozerAI && dozerAI->isAnyTaskPending();
+			if( !keepCurrentTask )
+				ai->aiIdle(CMD_FROM_AI); // stop any current behavior.
+			return ai->construct( what, pos, angle, owningPlayer, FALSE, queueIfBusy );
 		}
 		return nullptr;
 

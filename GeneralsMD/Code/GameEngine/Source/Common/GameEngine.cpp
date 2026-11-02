@@ -623,6 +623,26 @@ void GameEngine::init()
 		ini.loadFileDirectory("Data\\INI\\CommandMapDemo", INI_LOAD_MULTIFILE, nullptr, INI::LoadFlags_SearchSubDirs); // Added in Zero Hour
 #endif
 
+		// TheSuperHackers @feature Key bindings in the user data folder override the game's own, so hotkeys
+		// can be changed without touching the game files.
+		{
+			AsciiString userCommandMap;
+			userCommandMap.format("%sCommandMap.ini", TheGlobalData->getPath_UserData().str());
+			if (TheLocalFileSystem->doesFileExist(userCommandMap.str()))
+			{
+				try
+				{
+					INI userIni;
+					userIni.load(userCommandMap, INI_LOAD_OVERWRITE, nullptr);
+				}
+				catch (...)
+				{
+					// A broken user file must not prevent the game from starting.
+					DEBUG_LOG(("Failed to load the user key bindings from '%s'", userCommandMap.str()));
+				}
+			}
+		}
+
 		TheMetaMap->generateMetaMap();
 		TheMetaMap->verifyMetaMap();
 

@@ -159,6 +159,7 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "TOGGLE_LOWER_DETAILS",											GameMessage::MSG_META_TOGGLE_LOWER_DETAILS },
 	{ "TOGGLE_CONTROL_BAR",												GameMessage::MSG_META_TOGGLE_CONTROL_BAR },
 	{ "TOGGLE_PLAYER_OBSERVER",										GameMessage::MSG_META_TOGGLE_PLAYER_OBSERVER },
+	{ "TOGGLE_HEALTH_BARS",												GameMessage::MSG_META_TOGGLE_HEALTH_BARS },
 	{ "BEGIN_PATH_BUILD",													GameMessage::MSG_META_BEGIN_PATH_BUILD },
 	{ "END_PATH_BUILD",														GameMessage::MSG_META_END_PATH_BUILD },
 	{ "BEGIN_FORCEATTACK",												GameMessage::MSG_META_BEGIN_FORCEATTACK },
@@ -800,6 +801,17 @@ MetaMapRec *MetaMap::getMetaMapRec(GameMessage::Type t)
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool MetaMap::isKeyComboInUse(MappableKeyType key, MappableKeyModState modState) const
+{
+	for (const MetaMapRec *map = m_metaMaps; map; map = map->m_next)
+	{
+		if (map->m_key == key && map->m_modState == modState)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void MetaMap::generateMetaMap()
 {
 	// TheSuperHackers @info A default mapping for MSG_META_SELECT_ALL_AIRCRAFT would be useful for Generals
@@ -913,6 +925,29 @@ void MetaMap::generateMetaMap()
 			map->m_transition = DOWN;
 			map->m_modState = SHIFT; // Requires modifier to avoid key conflicts as a player.
 			map->m_usableIn = COMMANDUSABLE_EVERYWHERE;
+		}
+	}
+	{
+		// TheSuperHackers @feature Cycle the health bar mode. Use the first free key combo so that it
+		// does not collide with the bindings of any game language.
+		MetaMapRec *map = getMetaMapRec(GameMessage::MSG_META_TOGGLE_HEALTH_BARS);
+		if (map->m_key == MK_NONE)
+		{
+			static const MappableKeyModState candidates[] = { CTRL, ALT, SHIFT_CTRL };
+			for (Int i = 0; i < ARRAY_SIZE(candidates); ++i)
+			{
+				if (isKeyComboInUse(MK_H, candidates[i]))
+					continue;
+
+				map->m_key = MK_H;
+				map->m_transition = DOWN;
+				map->m_modState = candidates[i];
+				map->m_usableIn = COMMANDUSABLE_GAME;
+				map->m_category = CATEGORY_INTERFACE;
+				map->m_description = TheGameText->FETCH_OR_SUBSTITUTE("GUI:ToggleHealthBarsDescription", L"Show health bars for selected units only, for damaged units, or always");
+				map->m_displayName = TheGameText->FETCH_OR_SUBSTITUTE("GUI:ToggleHealthBars", L"Toggle Health Bars");
+				break;
+			}
 		}
 	}
 	{
