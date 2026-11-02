@@ -56,6 +56,16 @@ constexpr const Int SIMULATE_REPLAYS_SEQUENTIAL = -1;
 //-------------------------------------------------------------------------------------------------
 // Command-line parsing state is stored here instead of in CommandLine because
 // the parsing result belongs to the GlobalData instance created during startup.
+// TheSuperHackers @feature Controls for which objects health bars are drawn
+enum HealthBarMode CPP_11(: Int)
+{
+	HEALTH_BAR_MODE_SELECTED = 0,	///< only selected and moused over objects (original behavior)
+	HEALTH_BAR_MODE_DAMAGED,			///< also every damaged unit and structure in view
+	HEALTH_BAR_MODE_ALWAYS,				///< every unit and structure in view
+
+	HEALTH_BAR_MODE_COUNT
+};
+
 class CommandLineData
 {
 	friend class CommandLine;
@@ -427,6 +437,9 @@ public:
 
 	// TheSuperHackers @feature L3-M 21/08/2025 toggle the money per minute display, false shows only the original current money
 	Bool m_showMoneyPerMinute;
+
+	// TheSuperHackers @feature Health bar visibility, see HealthBarMode
+	Int m_healthBarMode;
 	Bool m_allowMoneyPerMinuteForPlayer;
 
 	// TheSuperHackers @feature bobtista 28/06/2026 user-configurable speed multiplier for game window transitions

@@ -246,6 +246,7 @@ public:
 		MSG_META_TOGGLE_LOWER_DETAILS,							///< toggles graphics options to crappy mode instantly
 		MSG_META_TOGGLE_CONTROL_BAR,								///< show/hide controlbar
 		MSG_META_TOGGLE_PLAYER_OBSERVER,						///< TheSuperHackers @feature Toggle the player observer view in game
+		MSG_META_TOGGLE_HEALTH_BARS,								///< TheSuperHackers @feature Cycle the health bar mode (selected, damaged, always)
 
 		MSG_META_BEGIN_PATH_BUILD,									///< enter path-building mode
 		MSG_META_END_PATH_BUILD,										///< exit path-building mode

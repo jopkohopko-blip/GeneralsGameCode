@@ -301,6 +301,16 @@ UpdateSleepTime WorkerAIUpdate::update()
 		// If we are harvesting, we can be diverted to clear mines.  jba.
 		getObject()->setWeaponSetFlag(WEAPONSET_MINE_CLEARING_DETAIL);//maybe go clear some mines, if I feel like it
 	}
+
+	// TheSuperHackers @feature Shift build queue. Move on to the next queued construction site.
+	if( !m_constructionQueue.isEmpty() && getCurrentTask() == DOZER_TASK_INVALID &&
+			!isAnyTaskPending() && !getObject()->isDisabled() )
+	{
+		Object *nextSite = m_constructionQueue.popNextResumable( getObject() );
+		if( nextSite )
+			privateResumeConstruction( nextSite, CMD_FROM_AI );
+	}
+
 	return UPDATE_SLEEP_NONE;
 }
 
@@ -319,7 +329,8 @@ Object *WorkerAIUpdate::construct( const ThingTemplate *what,
 																	 const Coord3D *pos,
 																	 Real angle,
 																	 Player *owningPlayer,
-																	 Bool isRebuild )
+																	 Bool isRebuild,
+																	 Bool queueIfBusy )
 {
 
 	// !!! NOTE: If you modify this you must modify the dozer too !!!
@@ -440,6 +451,18 @@ Object *WorkerAIUpdate::construct( const ThingTemplate *what,
 		MAKE_MODELCONDITION_MASK2(MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED),
 		MAKE_MODELCONDITION_MASK(MODELCONDITION_AWAITING_CONSTRUCTION)
 	);
+
+	// TheSuperHackers @feature Shift build queue. When the worker is already busy building, keep the
+	// new construction site waiting in the queue instead of abandoning the current one.
+	if( queueIfBusy && (isTaskPending( DOZER_TASK_BUILD ) || !m_constructionQueue.isEmpty()) )
+	{
+		m_constructionQueue.push( obj->getID() );
+		return obj;
+	}
+
+	// a normal (not queued) build order replaces anything that was queued before
+	if( !queueIfBusy )
+		m_constructionQueue.clear();
 
 	// we have a construction pending
 	newTask( DOZER_TASK_BUILD, obj );
@@ -939,6 +962,8 @@ void WorkerAIUpdate::onDelete()
 {
 	Int i;
 
+	m_constructionQueue.clear();
+
 	// cancel any of the tasks we had queued up
 	for( i = DOZER_TASK_FIRST; i < DOZER_NUM_TASKS; ++i )
 	{
@@ -1048,6 +1073,10 @@ void WorkerAIUpdate::aiDoCommand(const AICommandParms* parms)
 
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
+
+	// TheSuperHackers @feature Any new order from the player drops the Shift build queue.
+	if( parms->m_cmdSource == CMD_FROM_PLAYER )
+		m_constructionQueue.clear();
 
 	// create our machines if they don't yet exist
 	createMachines();
@@ -1500,6 +1529,7 @@ void WorkerAIUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version
 	* 2: TheSuperHackers @tweak Stubbjax 17/11/2025 Save the worker's previous task
+	* 3: TheSuperHackers @feature Save the Shift build queue
 	*/
 // ------------------------------------------------------------------------------------------------
 void WorkerAIUpdate::xfer( Xfer *xfer )
@@ -1507,7 +1537,7 @@ void WorkerAIUpdate::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
 #else
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 #endif
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
@@ -1561,6 +1591,9 @@ void WorkerAIUpdate::xfer( Xfer *xfer )
 
 	//-------------------------- xfer Worker info
 	xfer->xferSnapshot(m_workerMachine);
+
+	if (version >= 3)
+		m_constructionQueue.xfer(xfer);
 
 }
 
