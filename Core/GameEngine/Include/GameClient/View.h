@@ -144,6 +144,7 @@ public:
 	virtual void initHeightForMap() {};														///< Init the camera height for the map at the current position.
 	virtual void resetPivotToGround() {};													///< Set the camera pivot to the terrain height at the current position.
 	virtual void scrollBy( const Coord2D *delta );														///< Shift the view by the given delta
+	virtual void moveBy( const Coord2D *worldDelta );												///< Shift the view pivot by the given world space delta
 
 	virtual void moveCameraTo(const Coord3D *o, Int frames, Int shutter, Bool orient, Real easeIn=0.0f, Real easeOut=0.0f) { lookAt( o ); }
 	virtual void moveCameraAlongWaypointPath(Waypoint *way, Int frames, Int shutter, Bool orient, Real easeIn=0.0f, Real easeOut=0.0f) { }
@@ -206,6 +207,8 @@ public:
 	virtual Real getZoom() { return m_zoom; }
 	virtual void setZoom(Real z) { m_zoom = z; }
 	virtual Real getHeightAboveGround() { return m_heightAboveGround; }
+	Real getDefaultMaxHeightAboveGround() const { return m_defaultMaxHeightAboveGround; } ///< Camera height above ground of the default zoom
+	void setMaxHeightAboveGround(Real defaultMaxHeight); ///< Sets the default max camera height, the user can zoom out further by the zoom out scale
 	virtual void setHeightAboveGround(Real z);
 	virtual void zoom( Real height ); ///< Zoom in/out, closer to the ground, limit to min, or farther away from the ground, limit to max
 	virtual void setZoomToDefault() { m_zoom  = 1.0f; } ///< Set zoom to default value
@@ -225,6 +228,7 @@ public:
 	Bool userLookAt(const Coord3D *o)                    { return doUserAction(&View::lookAt, o); }
 	Bool userResetPivotToGround()                        { return doUserAction(&View::resetPivotToGround); }
 	Bool userScrollBy(const Coord2D *delta)              { return doUserAction(&View::scrollBy, delta); }
+	Bool userMoveBy(const Coord2D *worldDelta)           { return doUserAction(&View::moveBy, worldDelta); }
 	Bool userSetLocation(const ViewLocation *location)   { return doUserAction(&View::setLocation, location); }
 	Bool userSetCameraLock(ObjectID id)                  { return doUserAction(&View::setCameraLock, id); }
 	Bool userSetCameraLockDrawable(Drawable *drawable)   { return doUserAction(&View::setCameraLockDrawable, drawable); }
@@ -329,7 +333,9 @@ protected:
 	Real m_angle;																								///< Angle at which view has been rotated about the Z axis. Expected normalized
 	Real m_pitch;																								///< Rotation of view direction around horizontal (X) axis. Expected normalized
 
-	Real m_maxHeightAboveGround;																///< Highest camera above ground value
+	Real m_maxHeightAboveGround;																///< Highest camera above ground value the user can zoom out to
+	Real m_defaultMaxHeightAboveGround;													///< Highest camera above ground value of the original game, used for the default zoom
+	Real m_zoomOutScale;																				///< How much further than the original game the user can zoom out
 	Real m_minHeightAboveGround;																///< Lowest camera above ground value
 	Real m_zoom;																								///< Current zoom value
 	Real m_heightAboveGround;																		///< User's desired camera height above ground

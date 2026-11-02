@@ -29,6 +29,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "Common/GameEngine.h"
+#include "Common/OptionPreferences.h"
 #include "Common/Xfer.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
@@ -50,6 +51,8 @@ View::View()
 	m_heightAboveGround = 0.0f;
 	m_lockDist = 0.0f;
 	m_maxHeightAboveGround = 0.0f;
+	m_defaultMaxHeightAboveGround = 0.0f;
+	m_zoomOutScale = 1.0f;
 	m_minHeightAboveGround = 0.0f;
 	m_next = nullptr;
 	m_okToAdjustHeight = TRUE;
@@ -96,8 +99,11 @@ void View::init()
 	m_zoomLimited = TRUE;
 
 	m_zoom = 1.0f;
-	m_maxHeightAboveGround = TheGlobalData->m_maxCameraHeight;
 	m_minHeightAboveGround = TheGlobalData->m_minCameraHeight;
+
+	OptionPreferences prefs;
+	m_zoomOutScale = prefs.getCameraZoomOutScale();
+	setMaxHeightAboveGround(TheGlobalData->m_maxCameraHeight);
 	m_okToAdjustHeight = FALSE;
 
 	m_defaultAngle = DEG_TO_RADF(TheGlobalData->m_cameraYaw);
@@ -149,6 +155,20 @@ void View::scrollBy( const Coord2D *delta )
 	// update view's world position
 	m_pos.x += delta->x;
 	m_pos.y += delta->y;
+}
+
+void View::moveBy( const Coord2D *worldDelta )
+{
+	m_pos.x += worldDelta->x;
+	m_pos.y += worldDelta->y;
+}
+
+// @feature The user can zoom the camera further out than the original game allowed. The default
+// zoom keeps the original max height, so the game still starts with the familiar view.
+void View::setMaxHeightAboveGround(Real defaultMaxHeight)
+{
+	m_defaultMaxHeightAboveGround = std::max(defaultMaxHeight, m_minHeightAboveGround);
+	m_maxHeightAboveGround = m_defaultMaxHeightAboveGround * m_zoomOutScale;
 }
 
 /**
