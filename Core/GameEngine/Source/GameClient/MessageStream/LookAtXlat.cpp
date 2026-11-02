@@ -127,7 +127,8 @@ Bool LookAtTranslator::canScrollAtScreenEdge() const
 	if (!TheMouse->isCursorCaptured())
 		return false;
 
-	if (TheDisplay->getWindowed())
+	// @feature A borderless window behaves like fullscreen for screen edge scrolling.
+	if (TheDisplay->getWindowed() && !TheGlobalData->m_borderless)
 	{
 		if ((m_screenEdgeScrollMode & ScreenEdgeScrollMode_EnabledInWindowedApp) == 0)
 			return false;

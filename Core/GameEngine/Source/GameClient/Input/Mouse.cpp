@@ -1077,7 +1077,9 @@ Bool Mouse::canCapture() const
 	DEBUG_ASSERTCRASH(TheDisplay != nullptr, ("The Display is null"));
 	const Bool inInteractiveGame = TheGameLogic && TheGameLogic->isInInteractiveGame();
 
-	if (TheDisplay->getWindowed())
+	// @feature A borderless window covers the screen, so it follows the fullscreen capture rules.
+	// This keeps the cursor from slipping onto a second monitor.
+	if (TheDisplay->getWindowed() && !TheGlobalData->m_borderless)
 	{
 		if (inInteractiveGame)
 		{

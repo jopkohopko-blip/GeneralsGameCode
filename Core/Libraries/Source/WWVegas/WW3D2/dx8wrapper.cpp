@@ -904,10 +904,13 @@ void DX8Wrapper::Resize_And_Position_Window()
 		{
 			// TheSuperHackers @feature helmutbuhler 14/04/2025
 			// Center the window in the workarea of the monitor it is on.
+			// @feature A window without a caption (borderless) is centered on the whole monitor instead,
+			// so that at the desktop resolution it covers the taskbar like fullscreen does.
 			MONITORINFO mi = {sizeof(MONITORINFO)};
 			GetMonitorInfo(MonitorFromWindow(_Hwnd, MONITOR_DEFAULTTOPRIMARY), &mi);
-			int left = (mi.rcWork.left + mi.rcWork.right - width) / 2;
-			int top  = (mi.rcWork.top + mi.rcWork.bottom - height) / 2;
+			const RECT& area = (dwstyle & WS_CAPTION) ? mi.rcWork : mi.rcMonitor;
+			int left = (area.left + area.right - width) / 2;
+			int top  = (area.top + area.bottom - height) / 2;
 
 			// TheSuperHackers @feature helmutbuhler 14/04/2025
 			// Move the window to try fit it into the monitor area, if one of its dimensions is larger than the work area.

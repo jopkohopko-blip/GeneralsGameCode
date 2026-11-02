@@ -43,6 +43,8 @@
 #include "Common/CommandLine.h"
 #include "Common/CriticalSection.h"
 #include "Common/GlobalData.h"
+#include "Common/OptionPreferences.h"
+#include "WW3D2/dx8wrapper.h"
 #include "Common/GameEngine.h"
 #include "Common/GameSounds.h"
 #include "Common/Debug.h"
@@ -83,6 +85,46 @@ const char *gAppPrefix = ""; /// So WB can have a different debug log file name.
 static Bool gInitializing = false;
 static Bool gDoPaint = true;
 static Bool isWinMainActive = false;
+
+// getAppWindowStyle ==========================================================
+/** @feature Returns the window style for the current window mode. A borderless
+  * window has no caption or frame, but keeps the system menu and minimize box so
+  * that it still behaves well with the taskbar and Alt+Tab. */
+//=============================================================================
+static DWORD getAppWindowStyle( Bool runWindowed, Bool borderless )
+{
+	DWORD windowStyle = WS_POPUP|WS_VISIBLE|WS_SYSMENU;
+	if (runWindowed && !borderless)
+		windowStyle |= WS_MINIMIZEBOX | WS_DLGFRAME | WS_CAPTION;
+	else if (runWindowed)
+		windowStyle |= WS_MINIMIZEBOX;
+	return windowStyle;
+}
+
+// toggleBorderlessWindow =====================================================
+/** @feature Alt+Enter switches between a borderless and a framed window while
+  * the game runs. Both are D3D windowed modes, so the device is not reset.
+  * The choice is saved to Options.ini. */
+//=============================================================================
+static void toggleBorderlessWindow( HWND hWnd )
+{
+	if (!TheGlobalData->m_windowed)
+		return; // switching exclusive fullscreen at runtime is not supported
+
+	const Bool borderless = !TheGlobalData->m_borderless;
+	TheWritableGlobalData->m_borderless = borderless;
+
+	::SetWindowLong(hWnd, GWL_STYLE, getAppWindowStyle(TRUE, borderless));
+	::SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+	DX8Wrapper::Resize_And_Position_Window();
+
+	OptionPreferences prefs;
+	prefs.setWindowMode(borderless ? OptionPreferences::WindowMode_Borderless : OptionPreferences::WindowMode_Windowed);
+	prefs.write();
+
+	if (TheMouse)
+		TheMouse->refreshCursorCapture();
+}
 
 static HBITMAP gLoadScreenBitmap = nullptr;
 
@@ -320,7 +362,7 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 			//-------------------------------------------------------------------------
 			case WM_NCHITTEST:
 				// Prevent the user from selecting the menu in fullscreen mode
-				if( !TheGlobalData->m_windowed )
+				if( !TheGlobalData->m_windowed || TheGlobalData->m_borderless )
 					return HTCLIENT;
 				break;
 
@@ -360,6 +402,9 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 					case SC_MAXIMIZE:
 					case SC_MONITORPOWER:
 						if( !TheGlobalData->m_windowed )
+							return 1;
+						// @feature A borderless window must not be moved, resized or maximized.
+						if( TheGlobalData->m_borderless && (wParam & 0xFFF0) != SC_MONITORPOWER )
 							return 1;
 						break;
 				}
@@ -479,6 +524,22 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 						if (TheWin32Mouse)
 							TheWin32Mouse->setCursor(TheWin32Mouse->getMouseCursor());
 					}
+
+					// @bugfix The exclusive fullscreen window is topmost. When switching away with Alt+Tab it
+					// stayed above other windows, so drop it from the topmost band while inactive and minimize it.
+					if (!TheGlobalData->m_windowed && !gInitializing)
+					{
+						if (isWinMainActive)
+						{
+							::SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+						}
+						else
+						{
+							::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+							if (!::IsIconic(hWnd))
+								::ShowWindow(hWnd, SW_MINIMIZE);
+						}
+					}
 				}
 				return 0;
 			}
@@ -501,6 +562,19 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 					// Cursor can only be captured after one of the activation events.
 					if (TheMouse)
 						TheMouse->refreshCursorCapture();
+				}
+				break;
+			}
+
+			//-------------------------------------------------------------------------
+			case WM_SYSKEYDOWN:
+			{
+				// @feature Alt+Enter toggles between a borderless and a framed window.
+				// Bit 29 is set when Alt is held, bit 30 when the key was already down (auto repeat).
+				if (wParam == VK_RETURN && (lParam & (1 << 29)) && !(lParam & (1 << 30)))
+				{
+					toggleBorderlessWindow(hWnd);
+					return 0;
 				}
 				break;
 			}
@@ -707,11 +781,7 @@ static Bool initializeAppWindows( HINSTANCE hInstance, Int nCmdShow, Bool runWin
   RegisterClass( &wndClass );
 
    // Create our main window
-	windowStyle =  WS_POPUP|WS_VISIBLE;
-	if (runWindowed)
-		windowStyle |= WS_MINIMIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_CAPTION;
-	else
-		windowStyle |= WS_EX_TOPMOST | WS_SYSMENU;
+	windowStyle = getAppWindowStyle(runWindowed, TheGlobalData->m_borderless);
 
 	RECT rect;
 	rect.left = 0;
@@ -866,6 +936,14 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		// Initialize minidump facilities - requires TheGlobalData so performed after parseCommandLineForStartup
 		MiniDumper::initMiniDumper(TheGlobalData->getPath_UserData().str(), 'Z');
 #endif
+
+		// @feature Without -win, -fullscreen or -borderless on the command line, the window mode
+		// comes from Options.ini ("WindowMode"). Borderless is the default for new installs.
+		if (!TheGlobalData->m_headless && !TheGlobalData->m_windowModeFromCommandLine)
+		{
+			OptionPreferences prefs;
+			OptionPreferences::applyWindowModeToGlobalData(prefs.getWindowMode());
+		}
 
 		// register windows class and create application window
 		if(!TheGlobalData->m_headless && initializeAppWindows(hInstance, nCmdShow, TheGlobalData->m_windowed) == false)

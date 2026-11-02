@@ -619,7 +619,10 @@ protected:
 	/*
 	** Internal functions
 	*/
+public:
+	// @feature Public so the window procedure can refit the window after switching borderless mode.
 	static void Resize_And_Position_Window();
+protected:
 	static bool Find_Color_And_Z_Mode(int resx,int resy,int bitdepth,D3DFORMAT * set_colorbuffer,D3DFORMAT * set_backbuffer, D3DFORMAT * set_zmode);
 	static bool Find_Color_Mode(D3DFORMAT colorbuffer, int resx, int resy, UINT *mode);
 	static bool Find_Z_Mode(D3DFORMAT colorbuffer,D3DFORMAT backbuffer, D3DFORMAT *zmode);

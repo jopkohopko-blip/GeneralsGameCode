@@ -56,7 +56,20 @@ public:
 		AntiAliasingMode_Count
 	};
 
+	// @feature How the game window is presented. Stored as "WindowMode" in Options.ini.
+	enum WindowMode CPP_11(: Int)
+	{
+		WindowMode_Fullscreen = 0, ///< Exclusive fullscreen (original behavior)
+		WindowMode_Windowed, ///< Window with a frame
+		WindowMode_Borderless, ///< Window without a frame (default)
+		WindowMode_Count
+	};
+
 	Bool loadFromIniFile();
+
+	WindowMode getWindowMode() const;
+	void setWindowMode(WindowMode mode);
+	static void applyWindowModeToGlobalData(WindowMode mode);
 
 	WW3D::MultiSampleModeEnum getAntiAliasing() const;
 	TextureFilterClass::TextureFilterMode getTextureFilterMode() const;
