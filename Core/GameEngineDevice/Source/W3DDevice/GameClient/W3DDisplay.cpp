@@ -53,6 +53,7 @@ static void drawFramerateBar();
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
 #include "Common/GameLOD.h"
+#include "Common/OptionPreferences.h"
 #include "Common/DrawModule.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
@@ -3316,9 +3317,40 @@ void W3DDisplay::preloadTextureAssets( AsciiString texture )
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
+// Fork @performance Originally every map load freed all models, animations and textures that the
+// map's AssetUsage.txt did not list (campaign maps have none, so everything was freed), and the next
+// map then loaded all shared assets again from the archives. Now the assets stay cached between maps
+// while the process has plenty of address space left. With the large address aware executable on 64 bit
+// Windows that is almost always the case. When memory gets tight the original purge runs again.
+// Options.ini "KeepAssetsBetweenMaps = no" restores the original behavior.
+static Bool shouldKeepAssetsBetweenMaps()
+{
+	OptionPreferences pref;
+	if (!pref.getKeepAssetsBetweenMapsEnabled())
+		return FALSE;
+
+	MEMORYSTATUSEX status;
+	status.dwLength = sizeof(status);
+	if (!GlobalMemoryStatusEx(&status))
+		return FALSE;
+
+	// A campaign map with a new faction can add several hundred MB on top of the cache.
+	const DWORDLONG MinFreeAddressSpace = 1536ull * 1024 * 1024;
+	const DWORDLONG MinFreePhysicalMemory = 512ull * 1024 * 1024;
+	const Bool keep = status.ullAvailVirtual >= MinFreeAddressSpace && status.ullAvailPhys >= MinFreePhysicalMemory;
+
+	DEBUG_LOG(("W3DDisplay::shouldKeepAssetsBetweenMaps - free address space %u MB, free RAM %u MB, keep cache %d",
+		(UnsignedInt)(status.ullAvailVirtual / (1024 * 1024)), (UnsignedInt)(status.ullAvailPhys / (1024 * 1024)), (Int)keep));
+
+	return keep;
+}
+
 void W3DDisplay::doSmartAssetPurgeAndPreload(const char* usageFileName)
 {
 	if (!m_assetManager || !usageFileName || !*usageFileName)
+		return;
+
+	if (shouldKeepAssetsBetweenMaps())
 		return;
 
 	DynamicVectorClass<StringClass> names(8000);

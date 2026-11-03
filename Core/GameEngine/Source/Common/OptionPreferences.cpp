@@ -886,6 +886,21 @@ Real OptionPreferences::getResolutionFontAdjustment()
 	return fontScale;
 }
 
+Bool OptionPreferences::getBriefingMoviesEnabled() const
+{
+	return getBool("BriefingMovies", TRUE);
+}
+
+Bool OptionPreferences::getKeepAssetsBetweenMapsEnabled() const
+{
+	return getBool("KeepAssetsBetweenMaps", TRUE);
+}
+
+Bool OptionPreferences::getLogLoadTimesEnabled() const
+{
+	return getBool("LogLoadTimes", FALSE);
+}
+
 Bool OptionPreferences::getShowMoneyPerMinute() const
 {
 	OptionPreferences::const_iterator it = find("ShowMoneyPerMinute");
