@@ -313,6 +313,14 @@ public:
 	void friend_notifyLetterBoxActive(Bool active);
 	Bool isLetterBoxActive() const; ///< Ask whether the letterbox has been activated by a script; indicates an active cinematic
 
+	// TheSuperHackers @feature The player can skip scripted cinematics. The skip fast forwards the game
+	// without drawing and with muted audio until the script ends the cinematic and gives back the input.
+	Bool canSkipCinematic() const; ///< Ask whether a skippable scripted cinematic is running
+	Bool isSkippingCinematic() const { return m_skippingCinematic; }
+	Bool requestSkipCinematic(); ///< Start skipping the current cinematic. Returns true if the skip is active.
+	void stopSkippingCinematic();
+	void updateSkipCinematic(); ///< Called every logic frame, ends the skip when the cinematic is over
+
 	/// The following functions are used to update and query the debug window
 	Bool isTimeFrozenDebug();		///< Ask whether the debug window has requested a pause.
 	Bool isTimeFast();		///< Ask whether the debug window has requested a fast forward.
@@ -437,6 +445,8 @@ protected:
 	Int								m_endGameTimer;
 	Int								m_closeWindowTimer;
 	Bool							m_letterBoxActive; ///< A scripted letterbox sequence is running
+	Bool							m_skippingCinematic; ///< The player skips the current cinematic. Client state, not saved.
+	UnsignedInt				m_skipCinematicStartFrame;
 	Team							*m_callingTeam;					///< Team that is calling script, used for THIS_TEAM
 	Object						*m_callingObject;					///< Object that is calling script, used for THIS_OBJECT
 	Team							*m_conditionTeam;				///< Team that is being used to evaluate conditions, used for THIS_TEAM
