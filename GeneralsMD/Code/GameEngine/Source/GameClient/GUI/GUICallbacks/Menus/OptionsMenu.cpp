@@ -566,12 +566,12 @@ static void saveOptions()
 	//-------------------------------------------------------------------------------------------------
 	// mouse mode
 	TheWritableGlobalData->m_useAlternateMouse = GadgetCheckBoxIsChecked(checkAlternateMouse);
-	(*pref)["UseAlternateMouse"] = TheWritableGlobalData->m_useAlternateMouse ? "yes" : "no";
+	(*pref)["RightClickOrders"] = TheWritableGlobalData->m_useAlternateMouse ? "yes" : "no";
 
 	// TheSuperHackers @todo Add check box ?
 	{
 		Bool useRightMouseScrollWithAlternateMouse = pref->getRightMouseScrollWithAlternateMouseEnabled();
-		(*pref)["UseRightMouseScrollWithAlternateMouse"] = useRightMouseScrollWithAlternateMouse ? "yes" : "no";
+		(*pref)["RightClickOrdersDragScroll"] = useRightMouseScrollWithAlternateMouse ? "yes" : "no";
 		TheWritableGlobalData->m_useRightMouseScrollWithAlternateMouse = useRightMouseScrollWithAlternateMouse;
 	}
 
