@@ -43,7 +43,11 @@
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "Common/AudioAffect.h"
+#include "Common/GameAudio.h"
 
+#include "GameClient/Display.h"
+#include "GameClient/InGameUI.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/Shell.h"
 #include "GameClient/View.h"
@@ -56,6 +60,13 @@
 #include "GameLogic/ScriptConditions.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/SidesList.h"
+
+#include "GameNetwork/NetworkInterface.h"
+
+// TheSuperHackers @feature Skip scripted cinematics: draw one frame per this many skipped logic frames,
+// and give up the skip after this many logic frames in case a map never gives back the control.
+static const UnsignedInt SKIP_CINEMATIC_DRAW_INTERVAL = 30;
+static const UnsignedInt SKIP_CINEMATIC_MAX_FRAMES = LOGICFRAMES_PER_SECOND * 60 * 5;
 
 
 // These are for debugger window
@@ -385,6 +396,8 @@ m_freezeByScript(FALSE),
 m_frameObjectCountChanged(0),
 m_closeWindowTimer(0),
 m_letterBoxActive(FALSE),
+m_skippingCinematic(FALSE),
+m_skipCinematicStartFrame(0),
 m_curFadeFrame(0),
 m_curFadeValue(0.0f),
 m_endGameTimer(0),
@@ -4564,6 +4577,7 @@ void ScriptEngine::reset()
 	m_endGameTimer = -1;
 	m_closeWindowTimer = -1;
 	m_letterBoxActive = FALSE;
+	stopSkippingCinematic();
 
 	m_callingTeam = nullptr;
 	m_callingObject = nullptr;
@@ -4811,6 +4825,8 @@ void ScriptEngine::update()
 	} else {
 		particleEditorUpdate();
 	}
+
+	updateSkipCinematic();
 
 	if (m_closeWindowTimer>0) {
 		m_closeWindowTimer--;
@@ -7717,6 +7733,89 @@ void ScriptEngine::particleEditorUpdate()
 }
 
 //-------------------------------------------------------------------------------------------------
+// TheSuperHackers @feature Skip scripted cinematics
+//-------------------------------------------------------------------------------------------------
+Bool ScriptEngine::canSkipCinematic() const
+{
+	if (TheGameLogic == nullptr || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
+		return false;
+
+	// The skip changes the speed of the game, which only the single player can decide.
+	if (TheNetwork != nullptr || TheGameLogic->isInMultiplayerGame())
+		return false;
+
+	if (TheGameLogic->isGamePaused())
+		return false;
+
+	return m_letterBoxActive || (TheInGameUI != nullptr && !TheInGameUI->getInputEnabled());
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ScriptEngine::requestSkipCinematic()
+{
+	if (m_skippingCinematic)
+		return true;
+
+	if (!canSkipCinematic())
+		return false;
+
+	DEBUG_LOG(("ScriptEngine::requestSkipCinematic() - skipping cinematic at frame %u", TheGameLogic->getFrame()));
+
+	m_skippingCinematic = TRUE;
+	m_skipCinematicStartFrame = TheGameLogic->getFrame();
+
+	if (TheAudio != nullptr)
+		TheAudio->muteAudio(AudioManager::MuteAudioReason_SkipCinematic);
+
+	if (TheDisplay != nullptr && TheDisplay->isMoviePlaying())
+		TheDisplay->stopMovie();
+
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+void ScriptEngine::stopSkippingCinematic()
+{
+	if (!m_skippingCinematic)
+		return;
+
+	DEBUG_LOG(("ScriptEngine::stopSkippingCinematic() - stopped at frame %u", TheGameLogic ? TheGameLogic->getFrame() : 0));
+
+	m_skippingCinematic = FALSE;
+
+	if (TheAudio != nullptr)
+	{
+		// Dialog that started during the skip would otherwise keep talking in real time.
+		TheAudio->stopAudio(AudioAffect_Speech);
+		TheAudio->unmuteAudio(AudioManager::MuteAudioReason_SkipCinematic);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void ScriptEngine::updateSkipCinematic()
+{
+	if (!m_skippingCinematic)
+		return;
+
+	// The cinematic ends when the script has removed the letterbox, given back the input and unfrozen the time.
+	const Bool cinematicEnded = !m_letterBoxActive
+		&& (TheInGameUI == nullptr || TheInGameUI->getInputEnabled())
+		&& !m_freezeByScript;
+
+	// Safety net in case a map never gives back the control.
+	const Bool tooLong = TheGameLogic->getFrame() - m_skipCinematicStartFrame > SKIP_CINEMATIC_MAX_FRAMES;
+
+	if (cinematicEnded || tooLong || TheNetwork != nullptr)
+	{
+		stopSkippingCinematic();
+		return;
+	}
+
+	if (TheDisplay != nullptr && TheDisplay->isMoviePlaying())
+		TheDisplay->stopMovie();
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Is time frozen by a script? */
 //-------------------------------------------------------------------------------------------------
 Bool ScriptEngine::isTimeFrozenScript()
@@ -7785,6 +7884,12 @@ Bool ScriptEngine::isTimeFrozenDebug()
 //-------------------------------------------------------------------------------------------------
 Bool ScriptEngine::isTimeFast()
 {
+	if (m_skippingCinematic)
+	{
+		// Draw an occasional frame so that the player sees the cinematic rushing by.
+		return (TheGameLogic->getFrame() % SKIP_CINEMATIC_DRAW_INTERVAL) != 0;
+	}
+
 	typedef Bool (*funcptr)();
 
 	if (st_DebugDLL) {
