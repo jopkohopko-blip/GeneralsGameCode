@@ -43,6 +43,7 @@
 #include "Common/LatchRestore.h"
 #include "Common/MapObject.h"
 #include "Common/MultiplayerSettings.h"
+#include "Common/OptionPreferences.h"
 #include "Common/OSDisplay.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
@@ -179,6 +180,119 @@ enum
 	LOAD_PROGRESS_POST_STARTING_CAMERA_2 = LOAD_PROGRESS_POST_STARTING_CAMERA + 1,
 	LOAD_PROGRESS_END = 100,
 };
+
+// ------------------------------------------------------------------------------------------------
+// Fork @feature Options.ini "LogLoadTimes = yes" appends per-stage map load timings to LoadTimes.txt in
+// the user data folder, so slow load stages can be measured on real hardware.
+// ------------------------------------------------------------------------------------------------
+namespace
+{
+class LoadTimeLog
+{
+public:
+	LoadTimeLog() : m_enabled(FALSE), m_keepForMovie(FALSE), m_start(0), m_last(0), m_count(0) {}
+
+	void begin()
+	{
+		if (m_enabled && m_keepForMovie)
+		{
+			// Second call of startNewGame after the single player load screen movie.
+			m_keepForMovie = FALSE;
+			return;
+		}
+
+		OptionPreferences pref;
+		m_enabled = pref.getLogLoadTimesEnabled();
+		m_keepForMovie = FALSE;
+		m_count = 0;
+		m_start = m_last = timeGetTime();
+	}
+
+	void keepForMovie() { m_keepForMovie = TRUE; }
+
+	void mark(const char *stage)
+	{
+		if (!m_enabled)
+			return;
+
+		const UnsignedInt now = timeGetTime();
+		const UnsignedInt delta = now - m_last;
+		m_last = now;
+
+		// Consecutive progress updates of the same stage are summed up.
+		if (m_count > 0 && strcmp(m_stages[m_count - 1].name, stage) == 0)
+		{
+			m_stages[m_count - 1].ms += delta;
+			return;
+		}
+		if (m_count < MaxStages)
+		{
+			m_stages[m_count].name = stage;
+			m_stages[m_count].ms = delta;
+			++m_count;
+		}
+	}
+
+	void end(const AsciiString &mapName, Bool loadingSaveGame)
+	{
+		if (!m_enabled)
+			return;
+		m_enabled = FALSE;
+
+		AsciiString path = TheGlobalData->getPath_UserData();
+		path.concat("LoadTimes.txt");
+		FILE *fp = fopen(path.str(), "a");
+		if (fp == nullptr)
+			return;
+
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+		fprintf(fp, "%04d-%02d-%02d %02d:%02d:%02d  %s%s\n", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
+			mapName.str(), loadingSaveGame ? "  (save game)" : "");
+		for (Int i = 0; i < m_count; ++i)
+			fprintf(fp, "  %-34s %7u ms\n", m_stages[i].name, m_stages[i].ms);
+		fprintf(fp, "  %-34s %7u ms\n\n", "TOTAL", m_last - m_start);
+		fclose(fp);
+	}
+
+private:
+	enum { MaxStages = 48 };
+	struct Stage { const char *name; UnsignedInt ms; };
+
+	Bool m_enabled;
+	Bool m_keepForMovie;
+	UnsignedInt m_start;
+	UnsignedInt m_last;
+	Int m_count;
+	Stage m_stages[MaxStages];
+};
+
+LoadTimeLog s_loadTimeLog;
+
+// Names the work done since the previous progress update.
+const char *getLoadProgressStageName(Int progress)
+{
+	if (progress == LOAD_PROGRESS_START) return "load screen init";
+	if (progress == LOAD_PROGRESS_POST_PARTICLE_INI_LOAD) return "pre map";
+	if (progress == LOAD_PROGRESS_POST_LOAD_MAP) return "map.ini + map file";
+	if (progress < LOAD_PROGRESS_POST_SIDE_LIST_INIT) return "sides";
+	if (progress == LOAD_PROGRESS_POST_SIDE_LIST_INIT) return "side list init";
+	if (progress == LOAD_PROGRESS_POST_PLAYER_LIST_RESET) return "player list";
+	if (progress == LOAD_PROGRESS_POST_SCRIPT_ENGINE_NEW_MAP) return "script engine";
+	if (progress <= LOAD_PROGRESS_POST_VICTORY_CONDITION_SET_VICTORY_CONDITION) return "victory conditions";
+	if (progress == LOAD_PROGRESS_POST_GHOST_OBJECT_MANAGER_RESET) return "ghost objects";
+	if (progress == LOAD_PROGRESS_POST_TERRAIN_LOGIC_NEW_MAP) return "terrain logic";
+	if (progress == LOAD_PROGRESS_POST_BRIDGE_LOAD) return "bridges";
+	if (progress <= LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS) return "pathfinder + map objects";
+	if (progress < LOAD_PROGRESS_POST_INITIAL_NETWORK_BUILDINGS) return "initial buildings";
+	if (progress == LOAD_PROGRESS_POST_INITIAL_NETWORK_BUILDINGS) return "initial buildings";
+	if (progress == LOAD_PROGRESS_POST_PRELOAD_ASSETS) return "preload assets";
+	if (progress <= LOAD_PROGRESS_POST_STARTING_CAMERA_2) return "camera";
+	if (progress == LOAD_PROGRESS_END) return "final setup";
+	return "waiting for other players";
+}
+
+} // namespace
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -1082,6 +1196,8 @@ static void populateRandomStartPosition( GameInfo *game )
 void GameLogic::updateLoadProgress( Int progress )
 {
 
+	s_loadTimeLog.mark(getLoadProgressStageName(progress));
+
 	if( m_loadScreen )
 		m_loadScreen->update( progress );
 
@@ -1153,6 +1269,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	GetPrecisionTimer(&startTime64);
 	#endif
 
+	s_loadTimeLog.begin();
+
 	// reset the frame counter
 	m_frame = 0;
 	m_hasUpdated = FALSE;
@@ -1203,6 +1321,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 					m_loadScreen->init(nullptr);
 				}
 
+				s_loadTimeLog.mark("briefing movie");
+				s_loadTimeLog.keepForMovie();
 			}
 
 			m_startNewGame = TRUE;
@@ -2223,6 +2343,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	}
 
 	// if we're in a load game, don't fade yet
+	s_loadTimeLog.mark("waiting for other players");
+
 	if(loadingSaveGame == FALSE && TheTransitionHandler != nullptr && m_loadScreen)
 	{
 		TheFramePacer->reset();
@@ -2255,6 +2377,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 			deleteLoadScreen();
 
 	}
+
+	s_loadTimeLog.mark("fade in + load screen cleanup");
 
 	#ifdef DUMP_PERF_STATS
 	GetPrecisionTimer(&endTime64);
@@ -2368,6 +2492,9 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	HideControlBar();
 #endif
 	TheWritableGlobalData->m_loadScreenRender = FALSE;	///< mark to resume rendering as normal
+
+	s_loadTimeLog.mark("game start setup");
+	s_loadTimeLog.end(TheGlobalData->m_mapName, loadingSaveGame);
 
 	// if we're in a gamespy game, mark us as playing
 	if (TheGameSpyBuddyMessageQueue && TheGameSpyGame && isInInternetGame())

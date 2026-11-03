@@ -994,6 +994,21 @@ void OptionPreferences::setHealthBarMode( Int mode )
 	(*this)["HealthBars"] = s_healthBarModeNames[mode];
 }
 
+Bool OptionPreferences::getBriefingMoviesEnabled() const
+{
+	return getBool("BriefingMovies", TRUE);
+}
+
+Bool OptionPreferences::getKeepAssetsBetweenMapsEnabled() const
+{
+	return getBool("KeepAssetsBetweenMaps", TRUE);
+}
+
+Bool OptionPreferences::getLogLoadTimesEnabled() const
+{
+	return getBool("LogLoadTimes", FALSE);
+}
+
 Bool OptionPreferences::getShowMoneyPerMinute() const
 {
 	OptionPreferences::const_iterator it = find("ShowMoneyPerMinute");

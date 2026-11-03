@@ -74,6 +74,12 @@ public:
 	WW3D::MultiSampleModeEnum getAntiAliasing() const;
 	TextureFilterClass::TextureFilterMode getTextureFilterMode() const;
 	TextureFilterClass::AnisotropicFilterMode getTextureAnisotropyLevel() const;
+
+	// Loading speed options
+	Bool getBriefingMoviesEnabled() const;      ///< Options.ini "BriefingMovies": play the campaign load screen briefing movie
+	Bool getKeepAssetsBetweenMapsEnabled() const; ///< Options.ini "KeepAssetsBetweenMaps": keep loaded models and textures cached between maps
+	Bool getLogLoadTimesEnabled() const;        ///< Options.ini "LogLoadTimes": write LoadTimes.txt with per-stage map load timings
+
 	UnsignedInt getLANIPAddress();
 	UnsignedInt getOnlineIPAddress();
 	void setLANIPAddress(AsciiString IP);
