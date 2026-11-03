@@ -1044,13 +1044,13 @@ GlobalData::GlobalData()
 
 	m_keyboardCameraRotateSpeed = 0.1f;
 
-	m_useAlternateMouse = FALSE;
-#if RTS_GENERALS
-	// disable mouse scrolling in alternate mouse mode, per Harvard 7/15/03
+	// TheSuperHackers @feature Modern RTS mouse scheme by default: left click selects, right click
+	// issues orders (the original "alternate mouse" mode). Stored as RightClickOrders in Options.ini;
+	// the retail UseAlternateMouse key is ignored so existing configs pick up the new default.
+	m_useAlternateMouse = TRUE;
+	// Right drag does not scroll in this mode by default; the middle mouse button pans the map.
+	// Stored as RightClickOrdersDragScroll in Options.ini.
 	m_useRightMouseScrollWithAlternateMouse = FALSE;
-#else
-	m_useRightMouseScrollWithAlternateMouse = TRUE;
-#endif
 	m_clientRetaliationModeEnabled = TRUE; //On by default.
 	m_doubleClickAttackMove = FALSE;
 

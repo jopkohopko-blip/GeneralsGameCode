@@ -227,7 +227,7 @@ Bool OptionPreferences::getArchiveReplaysEnabled() const
 
 Bool OptionPreferences::getAlternateMouseModeEnabled()
 {
-	OptionPreferences::const_iterator it = find("UseAlternateMouse");
+	OptionPreferences::const_iterator it = find("RightClickOrders");
 	if (it == end())
 		return TheGlobalData->m_useAlternateMouse;
 
@@ -239,7 +239,7 @@ Bool OptionPreferences::getAlternateMouseModeEnabled()
 
 Bool OptionPreferences::getRightMouseScrollWithAlternateMouseEnabled() const
 {
-	OptionPreferences::const_iterator it = find("UseRightMouseScrollWithAlternateMouse");
+	OptionPreferences::const_iterator it = find("RightClickOrdersDragScroll");
 	if (it == end())
 		return TheGlobalData->m_useRightMouseScrollWithAlternateMouse;
 
