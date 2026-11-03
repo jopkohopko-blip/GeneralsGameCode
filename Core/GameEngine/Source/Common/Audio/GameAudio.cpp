@@ -144,6 +144,7 @@ AudioManager *TheAudio = nullptr;
 const char *const AudioManager::MuteAudioReasonNames[] =
 {
 	"MuteAudioReason_WindowFocus",
+	"MuteAudioReason_SkipCinematic",
 };
 
 // AudioManager Device Independent functions //////////////////////////////////////////////////////

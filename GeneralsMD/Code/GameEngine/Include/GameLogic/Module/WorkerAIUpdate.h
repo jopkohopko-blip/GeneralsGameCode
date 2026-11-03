@@ -144,7 +144,8 @@ public:
 	virtual Object *construct( const ThingTemplate *what,
 														 const Coord3D *pos, Real angle,
 														 Player *owningPlayer,
-														 Bool isRebuild ) override;			///< construct a building
+														 Bool isRebuild,
+														 Bool queueIfBusy = FALSE ) override;			///< construct a building
 
 	// get task information
 	virtual DozerTask getMostRecentCommand() override;				///< return task that was most recently issued
@@ -246,6 +247,8 @@ protected:
 	} m_dockPoint[ DOZER_NUM_TASKS ][ DOZER_NUM_DOCK_POINTS ];
 
 	DozerBuildSubTask m_buildSubTask;		///< for building and actually docking for the build
+
+	DozerConstructionQueue m_constructionQueue;	///< sites placed with Shift, built after the current one
 
 // Supply Truck data
 	Int m_numberBoxes;

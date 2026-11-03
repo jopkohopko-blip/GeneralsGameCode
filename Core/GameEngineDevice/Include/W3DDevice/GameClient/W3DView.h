@@ -164,7 +164,10 @@ public:
 	virtual void setHeight( Int height ) override;
 	virtual void setOrigin( Int x, Int y) override;			///< Sets location of top-left view corner on display
 
+	static Real getFullScreenHorizontalFOV();						///< Horizontal fov of a full-screen view, widened on widescreen displays (Hor+)
+
 	virtual void scrollBy( const Coord2D *delta ) override;  ///< Shift the view by the given delta
+	virtual void moveBy( const Coord2D *worldDelta ) override;  ///< Shift the view pivot by the given world space delta
 
 	virtual void forceRedraw() override;
 	virtual void onHeightMapChanged() override { m_lastScreenToTerrainValid = false; }

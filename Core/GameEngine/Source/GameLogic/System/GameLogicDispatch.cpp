@@ -888,7 +888,8 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 		if (maxFPS < 1 || maxFPS > 1000)
 			maxFPS = TheGlobalData->m_framesPerSecondLimit;
 		DEBUG_LOG(("Setting max FPS limit to %d FPS", maxFPS));
-		TheFramePacer->setFramesPerSecondLimit(maxFPS);
+		// @feature The skirmish game speed now sets the simulation speed instead of the render fps limit.
+		TheFramePacer->setGameSpeedFps(maxFPS);
 		TheWritableGlobalData->m_useFpsLimit = true;
 	}
 
@@ -1907,8 +1908,12 @@ bool GameLogic::onDozerConstruct(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &curr
 
 	if( msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT )
 	{
+		// TheSuperHackers @feature The optional 4th argument asks to queue the build behind the
+		// builder's current construction (placed with Shift held).
+		const Bool queueIfBusy = msg->getArgumentCount() >= 4 && msg->getArgument( 3 )->boolean;
+
 		TheBuildAssistant->buildObjectNow( constructorObject, place, &loc, angle,
-																				constructorObject->getControllingPlayer() );
+																				constructorObject->getControllingPlayer(), queueIfBusy );
 	}
 	else
 	{

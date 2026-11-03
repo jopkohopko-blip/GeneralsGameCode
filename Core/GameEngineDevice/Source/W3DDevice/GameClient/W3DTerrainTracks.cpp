@@ -835,6 +835,15 @@ Try improving the fit to vertical surfaces like cliffs.
 	{
 		DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexBuffer);
 		VertexFormatXYZDUV1 *verts = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
+
+		// TheSuperHackers @bugfix Skip the tracks for this frame when the vertex buffer could not be locked,
+		// for example while the device is lost, instead of writing through a null pointer.
+		if (verts == nullptr)
+		{
+			m_edgesToFlush = 0;
+			return;
+		}
+
 		trackStartIndex=0;
 
 		mod=m_usedModules;

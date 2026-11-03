@@ -38,6 +38,7 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/Eva.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/PlaceEventTranslator.h"
 
 #include "GameLogic/GameLogic.h"
@@ -268,6 +269,18 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 						}
 					}
 
+					// TheSuperHackers @feature Shift build queue. Holding Shift while placing a structure
+					// queues it behind the builder's current construction and keeps the placement mode
+					// active, so several structures can be placed in a row. Once a placement session has
+					// queued something, the last click without Shift is queued too and ends the session.
+#if RTS_ZEROHOUR
+					const Bool shiftHeld = TheKeyboard != nullptr && TheKeyboard->isShift();
+					const Bool queueBuild = !isLineBuild && (shiftHeld || TheInGameUI->isPlacementQueued());
+#else
+					const Bool shiftHeld = FALSE;
+					const Bool queueBuild = FALSE;
+#endif
+
 					// create the right kind of message
 					if( isLineBuild )
 						placeMsg = TheMessageStream->appendMessage( GameMessage::MSG_DOZER_CONSTRUCT_LINE );
@@ -281,11 +294,24 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 					{
 						placeMsg->appendLocationArgument( worldEnd );
 					}
+					else if( queueBuild )
+					{
+						placeMsg->appendBooleanArgument( TRUE );
+					}
 
 					pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), placeMsg->getType() );
 
-					// get out of pending placement mode, this will also clear the arrow anchor status
-					TheInGameUI->placeBuildAvailable( nullptr, nullptr );
+					if( queueBuild && shiftHeld )
+					{
+						// stay in placement mode, just unhook the anchor for the next structure
+						TheInGameUI->setPlacementStart( nullptr );
+						TheInGameUI->setPlacementQueued( TRUE );
+					}
+					else
+					{
+						// get out of pending placement mode, this will also clear the arrow anchor status
+						TheInGameUI->placeBuildAvailable( nullptr, nullptr );
+					}
 
 				}
 				else

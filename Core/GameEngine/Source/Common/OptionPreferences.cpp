@@ -67,6 +67,39 @@ Bool OptionPreferences::loadFromIniFile()
 	return load("Options.ini");
 }
 
+OptionPreferences::WindowMode OptionPreferences::getWindowMode() const
+{
+	OptionPreferences::const_iterator it = find("WindowMode");
+	if (it == end())
+		return WindowMode_Borderless;
+
+	if (stricmp(it->second.str(), "Fullscreen") == 0)
+		return WindowMode_Fullscreen;
+	if (stricmp(it->second.str(), "Windowed") == 0)
+		return WindowMode_Windowed;
+	if (stricmp(it->second.str(), "Borderless") == 0)
+		return WindowMode_Borderless;
+
+	return WindowMode_Borderless;
+}
+
+void OptionPreferences::setWindowMode(WindowMode mode)
+{
+	static const char *const names[] = { "Fullscreen", "Windowed", "Borderless" };
+	static_assert(ARRAY_SIZE(names) == WindowMode_Count, "Incorrect array size");
+
+	if (mode < 0 || mode >= WindowMode_Count)
+		mode = WindowMode_Borderless;
+
+	(*this)["WindowMode"] = names[mode];
+}
+
+void OptionPreferences::applyWindowModeToGlobalData(WindowMode mode)
+{
+	TheWritableGlobalData->m_windowed = (mode != WindowMode_Fullscreen);
+	TheWritableGlobalData->m_borderless = (mode == WindowMode_Borderless);
+}
+
 WW3D::MultiSampleModeEnum OptionPreferences::getAntiAliasing() const
 {
 	OptionPreferences::const_iterator it = find("AntiAliasing");
@@ -280,6 +313,41 @@ Bool OptionPreferences::getDrawScrollAnchor()
 		return TRUE;
 	}
 	return FALSE;
+}
+
+// @feature How much further than the original game the camera can zoom out. 1.0 is the original range.
+Real OptionPreferences::getCameraZoomOutScale() const
+{
+	constexpr const Real DefaultScale = 1.6f;
+	OptionPreferences::const_iterator it = find("CameraZoomOutScale");
+	if (it == end())
+		return DefaultScale;
+
+	const Real scale = (Real)atof(it->second.str());
+	if (scale <= 0.0f)
+		return DefaultScale;
+
+	return clamp(1.0f, scale, 3.0f);
+}
+
+// @feature Dragging with the middle mouse button pans the camera. Rotating then needs Alt + middle mouse button.
+Bool OptionPreferences::getMiddleMouseScrollEnabled() const
+{
+	OptionPreferences::const_iterator it = find("MiddleMouseScroll");
+	if (it == end())
+		return TRUE;
+
+	return stricmp(it->second.str(), "yes") == 0;
+}
+
+// @feature Keyboard and screen edge scrolling accelerate and glide out smoothly.
+Bool OptionPreferences::getSmoothScrollEnabled() const
+{
+	OptionPreferences::const_iterator it = find("SmoothScroll");
+	if (it == end())
+		return TRUE;
+
+	return stricmp(it->second.str(), "yes") == 0;
 }
 
 Bool OptionPreferences::getMoveScrollAnchor()
@@ -752,7 +820,20 @@ void OptionPreferences::getResolution(Int *xres, Int *yres)
 
 	OptionPreferences::const_iterator it = find("Resolution");
 	if (it == end())
+	{
+#ifdef _WIN32
+		// @feature Without a saved resolution the game now starts at the desktop resolution
+		// instead of 800 x 600. The display falls back to a safe mode if the device rejects it.
+		const Int desktopXRes = GetSystemMetrics(SM_CXSCREEN);
+		const Int desktopYRes = GetSystemMetrics(SM_CYSCREEN);
+		if (desktopXRes >= DEFAULT_DISPLAY_WIDTH && desktopYRes >= DEFAULT_DISPLAY_HEIGHT)
+		{
+			*xres = desktopXRes;
+			*yres = desktopYRes;
+		}
+#endif
 		return;
+	}
 
 	Int selectedXRes,selectedYRes;
 	if (sscanf(it->second.str(),"%d%d", &selectedXRes, &selectedYRes) != 2)
@@ -871,6 +952,46 @@ Real OptionPreferences::getResolutionFontAdjustment()
 		fontScale = -1.0f;
 	}
 	return fontScale;
+}
+
+// TheSuperHackers @feature The GUI keeps its aspect ratio on displays that are not 4:3, unless
+// 'UniformUIScaling = no' restores the original stretching.
+Bool OptionPreferences::getUniformUIScalingEnabled() const
+{
+	OptionPreferences::const_iterator it = find("UniformUIScaling");
+	if (it == end())
+		return TRUE;
+
+	if (stricmp(it->second.str(), "no") == 0)
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
+// TheSuperHackers @feature HealthBars = Selected | Damaged | Always
+static const char *const s_healthBarModeNames[HEALTH_BAR_MODE_COUNT] = { "Selected", "Damaged", "Always" };
+
+Int OptionPreferences::getHealthBarMode() const
+{
+	OptionPreferences::const_iterator it = find("HealthBars");
+	if (it == end())
+		return TheGlobalData->m_healthBarMode;
+
+	for (Int mode = 0; mode < HEALTH_BAR_MODE_COUNT; ++mode)
+	{
+		if (stricmp(it->second.str(), s_healthBarModeNames[mode]) == 0)
+			return mode;
+	}
+	return TheGlobalData->m_healthBarMode;
+}
+
+void OptionPreferences::setHealthBarMode( Int mode )
+{
+	if (mode < 0 || mode >= HEALTH_BAR_MODE_COUNT)
+		return;
+
+	(*this)["HealthBars"] = s_healthBarModeNames[mode];
 }
 
 Bool OptionPreferences::getShowMoneyPerMinute() const

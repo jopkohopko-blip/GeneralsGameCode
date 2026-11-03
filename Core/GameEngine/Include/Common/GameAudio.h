@@ -136,6 +136,7 @@ class AudioManager : public SubsystemInterface
 		enum MuteAudioReason CPP_11(: UnsignedInt)
 		{
 			MuteAudioReason_WindowFocus,
+			MuteAudioReason_SkipCinematic,
 
 			MuteAudioReason_Count
 		};

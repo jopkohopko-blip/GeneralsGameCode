@@ -197,6 +197,30 @@ W3DView::~W3DView()
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Returns the horizontal field of view for a view that covers the whole display.
+	* The game was designed for a 50 degree horizontal fov on 4:3 displays. On wider displays the
+	* vertical fov of the 4:3 view is kept and the horizontal fov is widened (Hor+). Displays that
+	* are 4:3 or narrower keep the original 50 degrees. */
+//-------------------------------------------------------------------------------------------------
+Real W3DView::getFullScreenHorizontalFOV()
+{
+	constexpr const Real DesignHorizontalFOV = DEG_TO_RADF(50.0f);
+	constexpr const Real DesignAspectRatio = 4.0f / 3.0f;
+
+	const Real displayWidth = (Real)TheDisplay->getWidth();
+	const Real displayHeight = (Real)TheDisplay->getHeight();
+	if (displayWidth <= 0.0f || displayHeight <= 0.0f)
+		return DesignHorizontalFOV;
+
+	const Real aspectRatio = displayWidth / displayHeight;
+	if (aspectRatio <= DesignAspectRatio)
+		return DesignHorizontalFOV;
+
+	const Real halfWidth = tanf(DesignHorizontalFOV * 0.5f) * (aspectRatio / DesignAspectRatio);
+	return 2.0f * atanf(halfWidth);
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Sets the height of the viewport, while maintaining original camera perspective. */
 //-------------------------------------------------------------------------------------------------
 void W3DView::setHeight(Int height)
@@ -233,7 +257,9 @@ void W3DView::setWidth(Int width)
 
 	//we want to maintain the same scale, so we'll need to adjust the fov.
 	//default W3D fov for full-screen is 50 degrees.
-	m_3DCamera->Set_View_Plane((Real)width/(Real)TheDisplay->getWidth()*DEG_TO_RADF(50.0f),-1);
+	// Widescreen: the full-screen horizontal fov now grows with the display aspect ratio (Hor+),
+	// so that wide displays see more to the sides instead of losing the top and bottom of the 4:3 view.
+	m_3DCamera->Set_View_Plane((Real)width/(Real)TheDisplay->getWidth()*getFullScreenHorizontalFOV(),-1);
 
 	m_cameraAreaConstraintsValid = false;
 	m_recalcCamera = true;
@@ -695,11 +721,12 @@ Real W3DView::getMaxHeight(Real x, Real y) const
 #if PRESERVE_RETAIL_SCRIPTED_CAMERA
 	if (!m_isUserControlled)
 	{
-		return getHeightAroundPos(x, y) + m_maxHeightAboveGround;
+		return getHeightAroundPos(x, y) + m_defaultMaxHeightAboveGround;
 	}
 #endif
 
-	return m_pos.z + m_maxHeightAboveGround;
+	// The scripted camera and the default zoom use the original max height.
+	return m_pos.z + m_defaultMaxHeightAboveGround;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2158,6 +2185,23 @@ void W3DView::scrollBy( const Coord2D *delta )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Shift the view pivot by a world space delta. Used to drag the map with the mouse. */
+//-------------------------------------------------------------------------------------------------
+void W3DView::moveBy( const Coord2D *worldDelta )
+{
+	if( worldDelta && (worldDelta->x != 0 || worldDelta->y != 0) )
+	{
+		Coord2D pos = getPosition2D();
+		pos.x += worldDelta->x;
+		pos.y += worldDelta->y;
+		setPosition2D(pos);
+
+		removeScriptedState(Scripted_Rotate);
+		m_recalcCamera = true;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 void W3DView::forceRedraw()
 {
@@ -2233,9 +2277,7 @@ void W3DView::setDefaultView(Real pitch, Real angle, Real maxHeight)
 	// MDC - we no longer want to rotate maps (design made all of them right to begin with)
 	//	m_defaultAngle = angle * WWMATH_PI/180.0f;
 	setDefaultPitch(pitch);
-	m_maxHeightAboveGround = TheGlobalData->m_maxCameraHeight*maxHeight;
-	if (m_minHeightAboveGround > m_maxHeightAboveGround)
-		m_maxHeightAboveGround = m_minHeightAboveGround;
+	setMaxHeightAboveGround(TheGlobalData->m_maxCameraHeight*maxHeight);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2258,7 +2300,9 @@ void W3DView::setHeightAboveGround(Real z)
 // the camera height.
 void W3DView::setZoom(Real z)
 {
-	m_heightAboveGround = m_maxHeightAboveGround * z;
+	// The zoom is relative to the default max height, so that saved views keep their height when the
+	// user zoom out range changes.
+	m_heightAboveGround = m_defaultMaxHeightAboveGround * z;
 	m_zoom = getDesiredZoom(m_pos.x, m_pos.y);
 
 	stopDoingScriptedCamera();
@@ -2272,8 +2316,9 @@ void W3DView::setZoom(Real z)
 void W3DView::setZoomToDefault()
 {
 	// default zoom has to be max, otherwise players will just zoom to max always
-	m_heightAboveGround = m_maxHeightAboveGround;
-	m_zoom = getMaxZoom(m_pos.x, m_pos.y);
+	// @feature The default zoom keeps the original max height, the user can still zoom out further.
+	m_heightAboveGround = m_defaultMaxHeightAboveGround;
+	m_zoom = getDesiredZoom(m_pos.x, m_pos.y);
 
 	stopDoingScriptedCamera();
 	m_CameraArrivedAtWaypointOnPathFlag = false;
@@ -3718,7 +3763,12 @@ bool W3DView::getDesiredTerrainDrawSize(ICoord2D &dimensions) const
 
 	const Real cameraPitch = asin(fabs(m_3DCamera->Get_Forward_Dir().Z));
 
-	if (cameraPitch > ViewDefaultLowPitchRadians || !m_isUserControlled)
+	// @feature The user can zoom out further than the original game. The regular draw size does not
+	// cover the visible area then, so the larger draw size is used as well.
+	const Real heightAboveGround = std::max(m_heightAboveGround, m_currentHeightAboveGround);
+	const Bool isZoomedOutFurther = heightAboveGround > m_defaultMaxHeightAboveGround + 1.0f;
+
+	if ((cameraPitch > ViewDefaultLowPitchRadians && !isZoomedOutFurther) || !m_isUserControlled)
 	{
 		// TheSuperHackers @info The scripted camera always uses the regular draw sizes
 		// and uses terrain oversize if it needs to enlarge.

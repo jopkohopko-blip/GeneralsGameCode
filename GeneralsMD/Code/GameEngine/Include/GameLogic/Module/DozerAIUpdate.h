@@ -121,7 +121,8 @@ public:
 	virtual Object *construct( const ThingTemplate *what,
 														 const Coord3D *pos, Real angle,
 														 Player *owningPlayer,
-														 Bool isRebuild ) = 0;
+														 Bool isRebuild,
+														 Bool queueIfBusy = FALSE ) = 0;
 
 
 	// get task information
@@ -162,6 +163,28 @@ public:
 	virtual void startBuildingSound( const AudioEventRTS *sound, ObjectID constructionSiteID ) = 0;
 	virtual void finishBuildingSound() = 0;
 
+};
+
+// ------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Shift build queue. Construction sites that were placed with Shift held
+	* while the dozer or worker was already busy building. The sites are created (and paid for) right
+	* away, and the builder resumes them one by one once it runs out of build tasks. Shared by the
+	* Dozer *AND* the Worker. */
+// ------------------------------------------------------------------------------------------------
+class DozerConstructionQueue
+{
+public:
+	void push( ObjectID constructionSiteID ) { m_sites.push_back( constructionSiteID ); }
+	void clear() { m_sites.clear(); }
+	Bool isEmpty() const { return m_sites.empty(); }
+
+	/// Remove and return the next queued site that the builder can still resume, or nullptr.
+	Object *popNextResumable( const Object *builder );
+
+	void xfer( Xfer *xfer );
+
+private:
+	std::vector<ObjectID> m_sites;
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -225,7 +248,8 @@ public:
 	virtual Object* construct( const ThingTemplate *what,
 														 const Coord3D *pos, Real angle,
 														 Player *owningPlayer,
-														 Bool isRebuild ) override;								///< construct an object
+														 Bool isRebuild,
+														 Bool queueIfBusy = FALSE ) override;								///< construct an object
 
 
 	// get task information
@@ -311,6 +335,8 @@ protected:
 	} m_dockPoint[ DOZER_NUM_TASKS ][ DOZER_NUM_DOCK_POINTS ];
 
 	DozerBuildSubTask m_buildSubTask;		///< for building and actually docking for the build
+
+	DozerConstructionQueue m_constructionQueue;	///< sites placed with Shift, built after the current one
 
 private:
 

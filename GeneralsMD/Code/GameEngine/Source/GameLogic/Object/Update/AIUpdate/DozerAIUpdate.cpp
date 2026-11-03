@@ -1635,6 +1635,15 @@ UpdateSleepTime DozerAIUpdate::update()
 	// run our own state machine
 	m_dozerMachine->updateStateMachine();
 
+	// TheSuperHackers @feature Shift build queue. Move on to the next queued construction site.
+	if( !m_constructionQueue.isEmpty() && getCurrentTask() == DOZER_TASK_INVALID &&
+			!isAnyTaskPending() && !getObject()->isDisabled() )
+	{
+		Object *nextSite = m_constructionQueue.popNextResumable( getObject() );
+		if( nextSite )
+			privateResumeConstruction( nextSite, CMD_FROM_AI );
+	}
+
 	return UPDATE_SLEEP_NONE;
 
 }
@@ -1646,7 +1655,8 @@ Object *DozerAIUpdate::construct( const ThingTemplate *what,
 																	const Coord3D *pos,
 																	Real angle,
 																	Player *owningPlayer,
-																	Bool isRebuild )
+																	Bool isRebuild,
+																	Bool queueIfBusy )
 {
 
 	// !!! NOTE: If you modify this you must modify the worker too !!!
@@ -1749,6 +1759,18 @@ Object *DozerAIUpdate::construct( const ThingTemplate *what,
 		MAKE_MODELCONDITION_MASK2(MODELCONDITION_PARTIALLY_CONSTRUCTED, MODELCONDITION_ACTIVELY_BEING_CONSTRUCTED),
 		MAKE_MODELCONDITION_MASK(MODELCONDITION_AWAITING_CONSTRUCTION)
 	);
+
+	// TheSuperHackers @feature Shift build queue. When the dozer is already busy building, keep the
+	// new construction site waiting in the queue instead of abandoning the current one.
+	if( queueIfBusy && (isTaskPending( DOZER_TASK_BUILD ) || !m_constructionQueue.isEmpty()) )
+	{
+		m_constructionQueue.push( obj->getID() );
+		return obj;
+	}
+
+	// a normal (not queued) build order replaces anything that was queued before
+	if( !queueIfBusy )
+		m_constructionQueue.clear();
 
 	// we have a construction pending
 	newTask( DOZER_TASK_BUILD, obj );
@@ -2316,6 +2338,8 @@ void DozerAIUpdate::onDelete()
 {
 	Int i;
 
+	m_constructionQueue.clear();
+
 	// cancel any of the tasks we had queued up
 	for( i = DOZER_TASK_FIRST; i < DOZER_NUM_TASKS; ++i )
 	{
@@ -2451,6 +2475,10 @@ void DozerAIUpdate::aiDoCommand(const AICommandParms* parms)
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
 
+	// TheSuperHackers @feature Any new order from the player drops the Shift build queue.
+	if( parms->m_cmdSource == CMD_FROM_PLAYER )
+		m_constructionQueue.clear();
+
 	// if we haven't made the dozer machine yet, do so now
 	createMachines();
 
@@ -2552,6 +2580,7 @@ void DozerAIUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version
 	* 2: TheSuperHackers @tweak Stubbjax 17/11/2025 Save the dozer's previous task
+	* 3: TheSuperHackers @feature Save the Shift build queue
 	*/
 // ------------------------------------------------------------------------------------------------
 void DozerAIUpdate::xfer( Xfer *xfer )
@@ -2560,7 +2589,7 @@ void DozerAIUpdate::xfer( Xfer *xfer )
 #if RETAIL_COMPATIBLE_XFER_SAVE
 	XferVersion currentVersion = 1;
 #else
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 #endif
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
@@ -2602,6 +2631,9 @@ void DozerAIUpdate::xfer( Xfer *xfer )
 	}
 	xfer->xferUser(&m_buildSubTask, sizeof(m_buildSubTask));
 
+	if (version >= 3)
+		m_constructionQueue.xfer(xfer);
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2614,3 +2646,53 @@ void DozerAIUpdate::loadPostProcess()
 }
 
 
+
+// ------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Shift build queue. Pop sites until one is found that the builder can
+	* still work on. Sites that were finished, destroyed, sold or taken over by another builder are
+	* skipped. */
+// ------------------------------------------------------------------------------------------------
+Object *DozerConstructionQueue::popNextResumable( const Object *builder )
+{
+	while( !m_sites.empty() )
+	{
+		ObjectID siteID = m_sites.front();
+		m_sites.erase( m_sites.begin() );
+
+		Object *site = TheGameLogic->findObjectByID( siteID );
+		if( site == nullptr || site->isEffectivelyDead() )
+			continue;
+
+		if( TheActionManager->canResumeConstructionOf( builder, site, CMD_FROM_AI ) )
+			return site;
+	}
+
+	return nullptr;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void DozerConstructionQueue::xfer( Xfer *xfer )
+{
+	UnsignedShort count = (UnsignedShort)m_sites.size();
+	xfer->xferUnsignedShort( &count );
+
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_sites.clear();
+		for( UnsignedShort i = 0; i < count; ++i )
+		{
+			ObjectID siteID = INVALID_ID;
+			xfer->xferObjectID( &siteID );
+			m_sites.push_back( siteID );
+		}
+	}
+	else
+	{
+		for( std::vector<ObjectID>::iterator it = m_sites.begin(); it != m_sites.end(); ++it )
+		{
+			ObjectID siteID = *it;
+			xfer->xferObjectID( &siteID );
+		}
+	}
+}

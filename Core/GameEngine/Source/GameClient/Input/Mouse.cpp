@@ -45,6 +45,7 @@
 #include "GameClient/Keyboard.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/GUILayout.h"
 
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ScriptEngine.h"
@@ -873,7 +874,9 @@ void Mouse::setCursorTooltip( UnicodeString tooltip, Int delay, const RGBColor *
 	if ( !tooltip.isEmpty() && width != m_lastTooltipWidth )
 	{
 		forceRecalc = TRUE;
-		Int widthInPixels = (Int)(TheDisplay->getWidth()*m_tooltipWidth*width);
+		// TheSuperHackers @feature The tooltip width follows the width of the uniformly scaled GUI.
+		const Real layoutWidth = gui::getDefaultLayoutTransform().toScreenWidth(DEFAULT_DISPLAY_WIDTH);
+		Int widthInPixels = (Int)(layoutWidth*m_tooltipWidth*width);
 		if (widthInPixels < 10)
 		{
 			widthInPixels = 120;
@@ -1074,7 +1077,9 @@ Bool Mouse::canCapture() const
 	DEBUG_ASSERTCRASH(TheDisplay != nullptr, ("The Display is null"));
 	const Bool inInteractiveGame = TheGameLogic && TheGameLogic->isInInteractiveGame();
 
-	if (TheDisplay->getWindowed())
+	// @feature A borderless window covers the screen, so it follows the fullscreen capture rules.
+	// This keeps the cursor from slipping onto a second monitor.
+	if (TheDisplay->getWindowed() && !TheGlobalData->m_borderless)
 	{
 		if (inInteractiveGame)
 		{

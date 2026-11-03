@@ -368,7 +368,8 @@ public:
 	virtual Object* construct( const ThingTemplate *what,
 														 const Coord3D *pos, Real angle,
 														 Player *owningPlayer,
-														 Bool isRebuild ) { return nullptr; }///< construct a building
+														 Bool isRebuild,
+														 Bool queueIfBusy = FALSE ) { return nullptr; }///< construct a building
 
 
 	void ignoreObstacle( const Object *obj );			///< tell the pathfinder to ignore the given object as an obstacle

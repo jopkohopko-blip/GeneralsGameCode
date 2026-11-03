@@ -60,6 +60,7 @@
 
 #include "GameClient/Display.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/GUILayout.h"
 
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
@@ -280,8 +281,20 @@ Int GlobalLanguage::adjustFontSize(Int theFontSize)
 {
 	// TheSuperHackers @todo This function is called very often.
 	// Therefore cache the adjustFactor on resolution change to not recompute it on every call.
-	const Real resolutionScaler = getResolutionFontSizeAdjustment();
-	const Real adjustFactor = getResolutionFontSizeScale(m_resolutionFontSizeMethod, resolutionScaler);
+	Real resolutionScaler = getResolutionFontSizeAdjustment();
+	ResolutionFontSizeMethod method = m_resolutionFontSizeMethod;
+
+	if (gui::isUniformScalingEnabled())
+	{
+		// TheSuperHackers @feature With uniform GUI scaling, fonts grow by the same factor as the windows
+		// that hold them, so text keeps the proportions of the 800x600 layout and stays sharp. A font
+		// adjustment from the user preferences still applies.
+		method = ResolutionFontSizeMethod_Strict;
+		if (m_userResolutionFontSizeAdjustment < 0.0f)
+			resolutionScaler = 1.0f;
+	}
+
+	const Real adjustFactor = getResolutionFontSizeScale(method, resolutionScaler);
 	const Int pointSize = REAL_TO_INT_FLOOR(theFontSize * adjustFactor);
 
 	return pointSize;

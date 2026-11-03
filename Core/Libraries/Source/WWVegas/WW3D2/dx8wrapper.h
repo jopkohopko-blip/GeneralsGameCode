@@ -576,6 +576,7 @@ protected:
 
 	static bool	Create_Device();
 	static void Release_Device();
+	static void Unbind_Device_Buffers();
 
 	static void Reset_Statistics();
 	static void Enumerate_Devices();
@@ -619,7 +620,10 @@ protected:
 	/*
 	** Internal functions
 	*/
+public:
+	// @feature Public so the window procedure can refit the window after switching borderless mode.
 	static void Resize_And_Position_Window();
+protected:
 	static bool Find_Color_And_Z_Mode(int resx,int resy,int bitdepth,D3DFORMAT * set_colorbuffer,D3DFORMAT * set_backbuffer, D3DFORMAT * set_zmode);
 	static bool Find_Color_Mode(D3DFORMAT colorbuffer, int resx, int resy, UINT *mode);
 	static bool Find_Z_Mode(D3DFORMAT colorbuffer,D3DFORMAT backbuffer, D3DFORMAT *zmode);
@@ -638,6 +642,7 @@ protected:
 
 	static bool								IsInitted;
 	static bool								IsDeviceLost;
+	static bool								DeviceResetFailed;	///< Until a Reset() succeeds the device only takes TestCooperativeLevel, Reset and Release
 	static void *							Hwnd;
 	static unsigned						_MainThreadID;
 

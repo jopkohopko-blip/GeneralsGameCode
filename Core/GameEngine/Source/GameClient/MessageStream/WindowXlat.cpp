@@ -55,6 +55,7 @@
 #include "GameClient/WindowXlat.h"
 #include "GameClient/Shell.h"
 #include "GameClient/Display.h"
+#include "GameLogic/ScriptEngine.h"
 
 
 // DEFINES ////////////////////////////////////////////////////////////////////
@@ -328,6 +329,22 @@ GameMessageDisposition WindowTranslator::translateGameMessage(const GameMessage 
 				else if (TheDisplay->isMoviePlaying())
 				{
 					TheDisplay->stopMovie();
+					returnCode = WIN_INPUT_USED;
+				}
+			}
+
+			// TheSuperHackers @feature The player can skip a scripted cinematic with ESC. The key down starts
+			// the skip, so that ESC does not open the options menu. The key up is swallowed as well.
+			if(returnCode != WIN_INPUT_USED &&
+				(key == KEY_ESC) &&
+				TheScriptEngine != nullptr)
+			{
+				if (TheScriptEngine->isSkippingCinematic())
+				{
+					returnCode = WIN_INPUT_USED;
+				}
+				else if (BitIsSet( state, KEY_STATE_DOWN ) && TheScriptEngine->requestSkipCinematic())
+				{
 					returnCode = WIN_INPUT_USED;
 				}
 			}

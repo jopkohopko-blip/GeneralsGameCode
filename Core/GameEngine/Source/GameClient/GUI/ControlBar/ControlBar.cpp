@@ -77,6 +77,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/WindowVideoManager.h"
 #include "GameClient/ControlBarResizer.h"
+#include "GameClient/GUILayout.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/HotKey.h"
 #include "GameClient/GameWindowTransitions.h"
@@ -425,8 +426,7 @@ void ControlBar::populatePurchaseScience( Player* player )
 	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], TheNameKeyGenerator->nameToKey( "GeneralsExpPoints.wnd:ProgressBarExperience" ) );
 	if(win)
 	{
-		Int progress;
-		progress = ((player->getSkillPoints() - player->getSkillPointsLevelDown()) * 100) /(player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown());
+		const Int progress = ((player->getSkillPoints() - player->getSkillPointsLevelDown()) * 100) / (player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown());
 		GadgetProgressBarSetProgress(win, progress);
 	}
 
@@ -484,8 +484,7 @@ void ControlBar::updateContextPurchaseScience()
 	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], TheNameKeyGenerator->nameToKey( "GeneralsExpPoints.wnd:ProgressBarExperience" ) );
 	if(win)
 	{
-		Int progress;
-		progress = ((player->getSkillPoints() - player->getSkillPointsLevelDown()) * 100) /(player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown());
+		const Int progress = ((player->getSkillPoints() - player->getSkillPointsLevelDown()) * 100) / (player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown());
 		GadgetProgressBarSetProgress(win, progress);
 	}
 
@@ -3827,5 +3826,13 @@ void ControlBar::setFullViewportHeight()
 
 void ControlBar::setScaledViewportHeight()
 {
+	// TheSuperHackers @feature When the uniformly scaled Control Bar leaves room to its sides, the
+	// world is drawn behind it on the whole display, otherwise those sides would stay empty.
+	if (gui::hasHorizontalMargins())
+	{
+		setFullViewportHeight();
+		return;
+	}
+
 	TheTacticalView->setHeight(TheDisplay->getHeight() * TheGlobalData->m_viewportHeightScale);
 }
