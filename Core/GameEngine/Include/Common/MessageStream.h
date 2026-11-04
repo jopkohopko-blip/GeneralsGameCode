@@ -263,6 +263,8 @@ public:
 		MSG_META_TAKE_SCREENSHOT_PNG,							///< TheSuperHackers @feature Take lossless PNG screenshot
 		MSG_META_ALL_CHEER,													///< Yay! :)
 		MSG_META_TOGGLE_ATTACKMOVE,									///< enter attack-move mode
+		MSG_META_ATTACK_MOVE_MODE,									///< TheSuperHackers @feature target an attack-move for the selected units
+		MSG_META_PATROL_MODE,												///< TheSuperHackers @feature target a patrol for the selected units
 
 		MSG_META_BEGIN_CAMERA_ROTATE_LEFT,
 		MSG_META_END_CAMERA_ROTATE_LEFT,
@@ -607,6 +609,7 @@ public:
 		MSG_LOGIC_CRC,															///< CRC from the logic passed around in a network game
 		MSG_SET_MINE_CLEARING_DETAIL,								///< Order selected unit(s) to clear mines
 		MSG_ENABLE_RETALIATION_MODE,								///< Turn retaliation mode on or off.
+		MSG_DO_PATROL,															///< TheSuperHackers @feature (location, [Bool queued]) Patrol between here and the location
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 
@@ -710,6 +713,7 @@ public:
 	virtual void update() override { };		///< Update system
 
 	GameMessage *getFirstMessage() { return m_firstMessage; }	///< Return the first message
+	GameMessage *getLastMessage() { return m_lastMessage; }		///< Return the last message
 
 	virtual void appendMessage( GameMessage *msg );			///< Add message to end of the list
 	virtual void insertMessage( GameMessage *msg, GameMessage *messageToInsertAfter );	// Insert message after messageToInsertAfter.

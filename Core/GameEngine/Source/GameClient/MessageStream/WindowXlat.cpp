@@ -200,6 +200,8 @@ GameMessageDisposition WindowTranslator::translateGameMessage(const GameMessage 
 	{
 		// ------------------------------------------------------------------------
 		case GameMessage::MSG_META_TOGGLE_ATTACKMOVE:
+		case GameMessage::MSG_META_ATTACK_MOVE_MODE:
+		case GameMessage::MSG_META_PATROL_MODE:
 		{
 			// Basically, we're cheating here. The mouse no longer sends us useless spam.
 			ICoord2D mousePos = TheMouse->getMouseStatus()->pos;

@@ -160,6 +160,8 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "TOGGLE_CONTROL_BAR",												GameMessage::MSG_META_TOGGLE_CONTROL_BAR },
 	{ "TOGGLE_PLAYER_OBSERVER",										GameMessage::MSG_META_TOGGLE_PLAYER_OBSERVER },
 	{ "TOGGLE_HEALTH_BARS",												GameMessage::MSG_META_TOGGLE_HEALTH_BARS },
+	{ "ATTACK_MOVE_MODE",													GameMessage::MSG_META_ATTACK_MOVE_MODE },
+	{ "PATROL_MODE",															GameMessage::MSG_META_PATROL_MODE },
 	{ "BEGIN_PATH_BUILD",													GameMessage::MSG_META_BEGIN_PATH_BUILD },
 	{ "END_PATH_BUILD",														GameMessage::MSG_META_END_PATH_BUILD },
 	{ "BEGIN_FORCEATTACK",												GameMessage::MSG_META_BEGIN_FORCEATTACK },

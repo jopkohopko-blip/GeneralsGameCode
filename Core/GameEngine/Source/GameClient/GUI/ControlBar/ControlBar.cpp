@@ -2073,6 +2073,37 @@ const CommandButton *ControlBar::findCommandButton( const AsciiString& name )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Targeting buttons for the attack-move and patrol hotkeys. They are
+	* created on first use, so they work for every unit whether or not its command set has them. */
+//-------------------------------------------------------------------------------------------------
+const CommandButton *ControlBar::getOrderModeCommandButton( GUICommandType command )
+{
+	AsciiString name;
+	AsciiString cursorName;
+	switch( command )
+	{
+		case GUI_COMMAND_ATTACK_MOVE:
+			name = "TSH_Command_AttackMoveHotkey";
+			cursorName = "AttackMove";
+			break;
+		case GUI_COMMAND_PATROL:
+			name = "TSH_Command_PatrolHotkey";
+			cursorName = "Waypoint";
+			break;
+		default:
+			return nullptr;
+	}
+
+	CommandButton *button = findNonConstCommandButton( name );
+	if( button == nullptr )
+	{
+		button = newCommandButton( name );
+		button->friend_setupBuiltIn( command, NEED_TARGET_POS, cursorName, cursorName );
+	}
+	return button;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Find existing command set by name */
 //-------------------------------------------------------------------------------------------------
 const CommandSet *ControlBar::findCommandSet( const AsciiString& name )

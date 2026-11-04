@@ -56,6 +56,8 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Keyboard.h"
+#include "GameClient/CommandXlat.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/GameText.h"
 #include "Common/AudioEventRTS.h"
 //-----------------------------------------------------------------------------
@@ -96,15 +98,37 @@ GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage 
 		{
 			newModState |= ALT;
 		}
-		if(newModState != 0)
-			return disp;
-		WideChar key = TheKeyboard->getPrintableKey((KeyDefType)msg->getArgument(0)->integer, 0);
-		UnicodeString uKey;
-		uKey.concat(key);
-		AsciiString aKey;
-		aKey.translate(uKey);
-		if(TheHotKeyManager && TheHotKeyManager->executeHotKey(aKey))
-			disp = DESTROY_MESSAGE;
+		if(newModState == 0)
+		{
+			WideChar key = TheKeyboard->getPrintableKey((KeyDefType)msg->getArgument(0)->integer, 0);
+			UnicodeString uKey;
+			uKey.concat(key);
+			AsciiString aKey;
+			aKey.translate(uKey);
+			if(TheHotKeyManager && TheHotKeyManager->executeHotKey(aKey))
+				return DESTROY_MESSAGE;
+		}
+
+		// TheSuperHackers @feature Default order hotkeys: A targets an attack-move and P a patrol for the
+		// selected units (Shift+A / Shift+P to queue). They only apply when no command button of the
+		// selected units uses the key and the CommandMap does not bind it, so nothing existing changes.
+		// The keys go by position on the keyboard, so they work in every keyboard layout.
+		if(newModState == 0 || newModState == SHIFT)
+		{
+			const Int keyCode = msg->getArgument(0)->integer;
+			GUICommandType command = GUI_COMMAND_NONE;
+			if(keyCode == KEY_A)
+				command = GUI_COMMAND_ATTACK_MOVE;
+			else if(keyCode == KEY_P)
+				command = GUI_COMMAND_PATROL;
+
+			if(command != GUI_COMMAND_NONE && TheMetaMap &&
+				!TheMetaMap->isKeyComboInUse((MappableKeyType)keyCode, (MappableKeyModState)newModState) &&
+				enterOrderTargetingMode(command))
+			{
+				disp = DESTROY_MESSAGE;
+			}
+		}
 	}
 	return disp;
 }

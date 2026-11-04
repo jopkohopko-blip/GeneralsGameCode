@@ -2321,6 +2321,64 @@ void AIGroup::groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, Comma
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+/**
+ * TheSuperHackers @feature Shift order queue and patrol. Give every member the order. Positional
+ * orders keep the shape of the group around the clicked point, squeezed if the group is spread out.
+ */
+void AIGroup::groupIssuePlayerOrder( PlayerOrderType type, const Coord3D *pos, ObjectID targetID, Bool queued )
+{
+	if (m_dirty)
+		recompute();
+
+	Coord3D center;
+	Coord2D lo;
+	Coord2D hi;
+	getMinMaxAndCenter( &lo, &hi, &center );
+
+	const Bool positional = (type != PLAYER_ORDER_ATTACK_OBJECT && type != PLAYER_ORDER_FORCE_ATTACK_OBJECT);
+
+	// how far the members may stand from the clicked point
+	Int count = 0;
+	Real maxOffset = 0.0f;
+	std::list<Object *>::iterator i;
+	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
+	{
+		Real dx = (*i)->getPosition()->x - center.x;
+		Real dy = (*i)->getPosition()->y - center.y;
+		const Real offset = sqrtf( dx*dx + dy*dy );
+		if( offset > maxOffset )
+			maxOffset = offset;
+		++count;
+	}
+	const Real allowedOffset = PATHFIND_CELL_SIZE_F * (1.0f + sqrtf( (Real)count ));
+	const Real squeeze = (maxOffset > allowedOffset) ? allowedOffset / maxOffset : 1.0f;
+
+	for( i = m_memberList.begin(); i != m_memberList.end(); ++i )
+	{
+		Object *member = *i;
+		AIUpdateInterface *ai = member->getAIUpdateInterface();
+		if( ai == nullptr )
+			continue;
+		if( member->isDisabledByType( DISABLED_HELD ) )
+			continue;
+		if( positional && member->isKindOf( KINDOF_IMMOBILE ) && type != PLAYER_ORDER_ATTACK_POSITION )
+			continue;
+
+		Coord3D dest = *pos;
+		if( positional && count > 1 )
+		{
+			dest.x += (member->getPosition()->x - center.x) * squeeze;
+			dest.y += (member->getPosition()->y - center.y) * squeeze;
+			clampWaypointPosition( dest, STD_WAYPOINT_CLAMP_MARGIN );
+			dest.z = TheTerrainLogic->getGroundHeight( dest.x, dest.y );
+		}
+
+		ai->issuePlayerOrder( type, &dest, targetID, queued );
+	}
+}
+
+
 /**
  * Attack move to a location
  */

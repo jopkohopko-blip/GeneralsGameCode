@@ -216,6 +216,7 @@ enum GUICommandType CPP_11(: Int)
 	GUI_COMMAND_SPECIAL_POWER_CONSTRUCT_FROM_SHORTCUT, ///< do a shortcut special power using the construct building interface
 
 	GUI_COMMAND_SELECT_ALL_UNITS_OF_TYPE,
+	GUI_COMMAND_PATROL,										///< TheSuperHackers @feature patrol between the unit and the target position
 
 	// add more commands here, don't forget to update the string command list below too ...
 
@@ -270,6 +271,7 @@ static const char *const TheGuiCommandNames[] =
 	"SPECIAL_POWER_CONSTRUCT",
 	"SPECIAL_POWER_CONSTRUCT_FROM_SHORTCUT",
 	"SELECT_ALL_UNITS_OF_TYPE",
+	"PATROL",
 
 	nullptr
 };
@@ -357,6 +359,15 @@ public:
 	const CommandButton* getNext() const { return m_next; }
 
 	void setName(const AsciiString& n) { m_name = n; }
+
+	/// TheSuperHackers @feature set up a button that the engine creates itself (no INI entry)
+	void friend_setupBuiltIn( GUICommandType command, UnsignedInt options, const AsciiString& cursorName, const AsciiString& invalidCursorName )
+	{
+		m_command = command;
+		m_options = options;
+		m_cursorName = cursorName;
+		m_invalidCursorName = invalidCursorName;
+	}
 
 	void setButtonImage( const Image *image ) { m_buttonImage = image; }
 
@@ -695,6 +706,8 @@ public:
 
 	/// find existing command button if present
 	const CommandButton *findCommandButton( const AsciiString& name );
+	/// TheSuperHackers @feature the attack-move and patrol targeting buttons used by the hotkeys
+	const CommandButton *getOrderModeCommandButton( GUICommandType command );
 
 	/// find existing command set
 	const CommandSet *findCommandSet( const AsciiString& name );

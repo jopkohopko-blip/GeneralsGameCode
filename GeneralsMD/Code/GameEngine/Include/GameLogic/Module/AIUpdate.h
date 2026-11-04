@@ -454,6 +454,23 @@ public:
 	void clearWaypointQueue();								///< reset the waypoint queue to empty
 	void executeWaypointQueue();							///< start moving along queued waypoints
 
+	// TheSuperHackers @feature Shift order queue and patrol ---------------------------------------------
+	struct PlayerOrder
+	{
+		PlayerOrderType	m_type;
+		Coord3D					m_pos;
+		ObjectID				m_targetID;
+	};
+	enum { MAX_PLAYER_ORDERS = 32 };
+	void issuePlayerOrder( PlayerOrderType type, const Coord3D *pos, ObjectID targetID, Bool queued );	///< run now, or queue behind the current orders
+	void clearPlayerOrders();																///< drop queued orders and the patrol route
+	Bool hasPlayerOrders() const { return !m_playerOrders.empty() || !m_patrolRoute.empty(); }
+	Int getPlayerOrderCount() const { return (Int)m_playerOrders.size(); }
+	const PlayerOrder *getPlayerOrder( Int i ) const { return (i >= 0 && i < (Int)m_playerOrders.size()) ? &m_playerOrders[i] : nullptr; }
+	Int getPatrolRouteSize() const { return (Int)m_patrolRoute.size(); }
+	const Coord3D *getPatrolRoutePoint( Int i ) const { return (i >= 0 && i < (Int)m_patrolRoute.size()) ? &m_patrolRoute[i] : nullptr; }
+	Int getPatrolRouteIndex() const { return m_patrolIndex; }
+
 	// Pathfinding ---------------------------------------------------------------------------------------
 private:
 	Bool computePath( PathfindServicesInterface *pathfinder, Coord3D *destination );	///< computes path to destination, returns false if no path
@@ -803,6 +820,16 @@ private:
 	Bool				m_allowedToChase;						///< Allowed to pursue targets.
 	Bool				m_isInUpdate;								///< If true, we are inside our update method.
 	Bool				m_fixLocoInPostProcess;
+
+	// TheSuperHackers @feature Shift order queue and patrol
+	void processPlayerOrders();
+	Bool executePlayerOrder( const PlayerOrder &order );
+	void startNextPatrolLeg();
+	std::vector<PlayerOrder>	m_playerOrders;					///< orders waiting behind the current one
+	std::vector<Coord3D>			m_patrolRoute;					///< patrol points, the first one is where the patrol started
+	Int												m_patrolIndex;					///< patrol point we are heading to
+	UnsignedInt								m_nextPatrolLegFrame;		///< earliest frame for the next patrol leg
+	Bool											m_executingPlayerOrder;	///< TRUE while we issue a queued order to ourselves
 };
 
 //------------------------------------------------------------------------------------------------------------
