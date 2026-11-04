@@ -40,6 +40,15 @@ if(MSVC)
     target_link_options(z_generals PRIVATE "/NODEFAULTLIB:libci.lib")
 endif()
 
+# Fork @performance Large address aware: the 32 bit game may use up to 4 GB of address space on 64 bit
+# Windows instead of 2 GB (same as the popular "4GB patch"). This leaves room to keep assets cached
+# between maps, which makes loading the next mission faster.
+if(MSVC)
+    target_link_options(z_generals PRIVATE "/LARGEADDRESSAWARE")
+elseif(MINGW)
+    target_link_options(z_generals PRIVATE "-Wl,--large-address-aware")
+endif()
+
 target_include_directories(z_generals PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}

@@ -62,6 +62,7 @@
 #include "Common/GameState.h"
 #include "Common/MessageStream.h"
 #include "Common/MultiplayerSettings.h"
+#include "Common/OptionPreferences.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
@@ -113,6 +114,122 @@
 //-----------------------------------------------------------------------------
 // PRIVATE FUNCTIONS //////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
+
+extern HWND ApplicationHWnd;
+
+namespace
+{
+
+// Fork @feature The campaign load screen briefing movie plays to the end before the map even starts
+// loading. It can now be skipped with any key or mouse button (originally ESC only), and it can be
+// turned off entirely with Options.ini "BriefingMovies = no".
+class BriefingMovieSkipInput
+{
+public:
+	BriefingMovieSkipInput()
+		: m_mouseButtonWasPressed(FALSE)
+	{
+		for (Int i = 0; i < KEY_COUNT; ++i)
+			m_keyWasPressed[i] = FALSE;
+
+		OptionPreferences pref;
+		m_moviesEnabled = pref.getBriefingMoviesEnabled();
+	}
+
+	// Returns TRUE when the movie should stop. Pumps the OS messages and the keyboard.
+	Bool isSkipRequested()
+	{
+		if (!m_moviesEnabled)
+			return TRUE;
+
+		// ESC, quit and alt-F4 handling.
+		if (GameClient::isMovieAbortRequested())
+			return TRUE;
+
+		if (pollKeyboard())
+			return TRUE;
+
+		return pollMouse();
+	}
+
+private:
+	static Bool isIgnoredKey(UnsignedByte key)
+	{
+		switch (key)
+		{
+			case KEY_LALT: case KEY_RALT:
+			case KEY_LCTRL: case KEY_RCTRL:
+			case KEY_LSHIFT: case KEY_RSHIFT:
+			case KEY_TAB: case KEY_CAPS:
+			case KEY_SYSREQ:
+				return TRUE;
+			default:
+				return FALSE;
+		}
+	}
+
+	// A key only counts once both its press and its release happened during the movie, so the
+	// release of the key that started the mission does not skip the movie by accident.
+	Bool pollKeyboard()
+	{
+		if (TheKeyboard == nullptr)
+			return FALSE;
+
+		for (KeyboardIO *io = TheKeyboard->getFirstKey(); io->key != KEY_NONE; ++io)
+		{
+			if (io->status != KeyboardIO::STATUS_UNUSED || isIgnoredKey(io->key))
+				continue;
+
+			if (BitIsSet(io->state, KEY_STATE_DOWN))
+			{
+				// Alt+Tab and similar system shortcuts never skip.
+				if (!(io->state & KEY_STATE_ALT))
+					m_keyWasPressed[io->key] = TRUE;
+			}
+			else if (BitIsSet(io->state, KEY_STATE_UP) && m_keyWasPressed[io->key])
+			{
+				io->setUsed();
+				return TRUE;
+			}
+		}
+		return FALSE;
+	}
+
+	// Same press-then-release rule for the mouse buttons. They are read from the OS directly because
+	// the game mouse is not updated while the load screen blocks the main loop.
+	Bool pollMouse()
+	{
+		if (ApplicationHWnd == nullptr || GetForegroundWindow() != ApplicationHWnd)
+		{
+			m_mouseButtonWasPressed = FALSE;
+			return FALSE;
+		}
+
+		const Bool down = ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000) != 0;
+		if (down)
+		{
+			m_mouseButtonWasPressed = TRUE;
+			return FALSE;
+		}
+
+		if (m_mouseButtonWasPressed)
+		{
+			m_mouseButtonWasPressed = FALSE;
+
+			// Drop the queued click so it does not reach the map once the mission starts.
+			if (TheMouse)
+				TheMouse->update();
+			return TRUE;
+		}
+		return FALSE;
+	}
+
+	Bool m_moviesEnabled;
+	Bool m_mouseButtonWasPressed;
+	Bool m_keyWasPressed[KEY_COUNT];
+};
+
+} // namespace
 
 //-----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////
@@ -532,6 +649,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 	// else leave the default background screen
 
 
+	BriefingMovieSkipInput skipInput;
 	if(TheGameLODManager && TheGameLODManager->didMemPass())
 	{
 		// TheSuperHackers @bugfix Originally this movie render loop stopped rendering when the game window was inactive.
@@ -541,7 +659,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 		Int shiftedPercent = -FRAME_FUDGE_ADD + 1;
 		while (m_videoStream->frameIndex() < m_videoStream->frameCount() - 1 )
 		{
-			if (GameClient::isMovieAbortRequested())
+			if (skipInput.isSkipRequested())
 			{
 				break;
 			}
@@ -627,7 +745,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 			fudgeFactor = 30 * ((currTime - begin)/ INT_TO_REAL(delay ));
 			GadgetProgressBarSetProgress(m_progressBar, fudgeFactor);
 
-			if (GameClient::isMovieAbortRequested())
+			if (skipInput.isSkipRequested())
 			{
 				break;
 			}
@@ -1043,17 +1161,20 @@ void ChallengeLoadScreen::init( GameInfo *game )
 	m_wndVideoManager = NEW WindowVideoManager;
 	m_wndVideoManager->init();
 
+	BriefingMovieSkipInput skipInput;
 	if(TheGameLODManager && TheGameLODManager->didMemPass())
 	{
 		// TheSuperHackers @bugfix Originally this movie render loop stopped rendering when the game window was inactive.
 		// This either skipped the movie or caused decompression artifacts. Now the video just keeps playing until it done.
 
+		Bool skipped = FALSE;
 		Int progressUpdateCount = m_videoStream->frameCount() / FRAME_FUDGE_ADD;
 		Int shiftedPercent = -FRAME_FUDGE_ADD + 1;
 		while (m_videoStream->frameIndex() < m_videoStream->frameCount() - 1 )
 		{
-			if (GameClient::isMovieAbortRequested())
+			if (skipInput.isSkipRequested())
 			{
+				skipped = TRUE;
 				break;
 			}
 
@@ -1092,6 +1213,15 @@ void ChallengeLoadScreen::init( GameInfo *game )
 
 			TheAudio->update();
 		}
+
+		if (skipped)
+		{
+			// Show the general bios right away instead of leaving the screen half animated.
+			activatePiecesMinSpec(generalPlayer, generalOpponent);
+			m_wndVideoManager->update();
+			TheWindowManager->update();
+			TheDisplay->draw();
+		}
 	}
 	else
 	{
@@ -1121,7 +1251,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 			fudgeFactor = 30 * ((currTime - begin)/ INT_TO_REAL(delay ));
 			GadgetProgressBarSetProgress(m_progressBar, fudgeFactor);
 
-			if (GameClient::isMovieAbortRequested())
+			if (skipInput.isSkipRequested())
 			{
 				break;
 			}
