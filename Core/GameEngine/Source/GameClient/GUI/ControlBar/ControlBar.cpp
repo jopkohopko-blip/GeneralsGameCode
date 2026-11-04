@@ -3754,6 +3754,10 @@ void ControlBar::updateSpecialPowerShortcut()
 //-------------------------------------------------------------------------------------------------
 void ControlBar::drawSpecialPowerShortcutMultiplierText()
 {
+	Player *localPlayer = ThePlayerList ? ThePlayerList->getLocalPlayer() : nullptr;
+	if( localPlayer == nullptr )
+		return;
+
 	for( Int i = 0; i < m_currentlyUsedSpecialPowersButtons; i++ )
 	{
 		GameWindow *win;
@@ -3769,39 +3773,39 @@ void ControlBar::drawSpecialPowerShortcutMultiplierText()
 		if( command == nullptr )
 			continue;
 
-		//draw superweapon ready multipliers
-		for( int i = 0; i < MAX_SPECIAL_POWER_SHORTCUTS; i++ )
+		UnicodeString unibuffer;
+		const SpecialPowerTemplate *spTemplate = command->getSpecialPowerTemplate();
+		if( spTemplate )
 		{
-			if( !m_shortcutDisplayStrings[ i ] )
-			{
-				//m_shortcutDisplayStrings[ i ] = TheDisplayStringManager->newDisplayString();
-				//m_shortcutDisplayStrings[ i ]->setFont( TheFontLibrary->getFont( "Arial", 16, false ) );
-			}
-
-			const SpecialPowerTemplate *spTemplate = command->getSpecialPowerTemplate();
-			Int numReady = 0;
-			if( spTemplate )
-			{
-				numReady = ThePlayerList->getLocalPlayer()->countReadyShortcutSpecialPowersOfType( spTemplate->getSpecialPowerType() );
-			}
+			//draw superweapon ready multipliers
+			const Int numReady = localPlayer->countReadyShortcutSpecialPowersOfType( spTemplate->getSpecialPowerType() );
 			if( numReady > 1 ) // Lorenzen changed... Displaying a "1" is superfluous
 			{
-				UnicodeString unibuffer;
 				unibuffer.format( L"%d", numReady );
-
-				GadgetButtonSetText( win, unibuffer );
-
-				//m_shortcutDisplayStrings[ i ]->setText( unibuffer );
-				//TheControlBar->m_shortcutDisplayStrings[ i ]->draw( 600, i * 40 + 40, GameMakeColor(255,255,255,255), GameMakeColor(0,0,0,0), 0, 0 );
 			}
-			else
+			else if( numReady == 0 && TheGlobalData->m_showPowerCooldownTimers )
 			{
-				UnicodeString unibuffer;
-				GadgetButtonSetText( win, unibuffer );
-				//TheDisplayStringManager->freeDisplayString( m_shortcutDisplayStrings[ i ] );
-				//m_shortcutDisplayStrings[ i ] = nullptr;
+				// TheSuperHackers @feature Show the remaining recharge time of the most ready power on its button.
+				Object *obj = localPlayer->findMostReadyShortcutSpecialPowerOfType( spTemplate->getSpecialPowerType() );
+				const SpecialPowerModuleInterface *spModule = obj ? obj->getSpecialPowerModule( spTemplate ) : nullptr;
+				if( spModule && !spModule->isReady() )
+				{
+					const UnsignedInt now = TheGameLogic->getFrame();
+					const UnsignedInt readyFrame = spModule->getReadyFrame();
+					if( readyFrame > now )
+					{
+						const UnsignedInt seconds = ( readyFrame - now + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND;
+						if( seconds >= 60 )
+							unibuffer.format( L"%u:%02u", seconds / 60, seconds % 60 );
+						else
+							unibuffer.format( L"%u", seconds );
+					}
+				}
 			}
 		}
+
+		if( win->winGetText().compare( unibuffer ) != 0 )
+			GadgetButtonSetText( win, unibuffer );
 	}
 }
 

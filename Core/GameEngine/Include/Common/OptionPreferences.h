@@ -160,6 +160,10 @@ public:
 
 	Bool getShowMoneyPerMinute() const;
 	Int getHealthBarMode() const;
+	Bool getShowExperienceBars() const;
+	Bool getShowPowerCooldownTimers() const;
+	Bool getShowArmyCounter() const;
+	Bool getShowIdleWorkerCount() const;
 	void setHealthBarMode( Int mode );
 
 	Real getGameWindowTransitionSpeedMultiplier() const;

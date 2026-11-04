@@ -1073,6 +1073,27 @@ void OptionPreferences::setHealthBarMode( Int mode )
 	(*this)["HealthBars"] = s_healthBarModeNames[mode];
 }
 
+// TheSuperHackers @feature Campaign HUD additions, all on by default
+Bool OptionPreferences::getShowExperienceBars() const
+{
+	return getBool("ExperienceBars", TheGlobalData->m_showExperienceBars);
+}
+
+Bool OptionPreferences::getShowPowerCooldownTimers() const
+{
+	return getBool("PowerCooldownTimers", TheGlobalData->m_showPowerCooldownTimers);
+}
+
+Bool OptionPreferences::getShowArmyCounter() const
+{
+	return getBool("ArmyCounter", TheGlobalData->m_showArmyCounter);
+}
+
+Bool OptionPreferences::getShowIdleWorkerCount() const
+{
+	return getBool("IdleWorkerCount", TheGlobalData->m_showIdleWorkerCount);
+}
+
 Bool OptionPreferences::getBriefingMoviesEnabled() const
 {
 	return getBool("BriefingMovies", TRUE);

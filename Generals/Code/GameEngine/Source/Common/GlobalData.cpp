@@ -958,9 +958,14 @@ GlobalData::GlobalData()
 	m_gameTimeFontSize = 8;
 	m_playerInfoListFontSize = 8;
 
-	m_showMoneyPerMinute = FALSE;
+	// TheSuperHackers @tweak Show the income per minute next to the money by default, also for players
+	m_showMoneyPerMinute = TRUE;
 	m_healthBarMode = HEALTH_BAR_MODE_ALWAYS;
-	m_allowMoneyPerMinuteForPlayer = FALSE;
+	m_allowMoneyPerMinuteForPlayer = TRUE;
+	m_showExperienceBars = TRUE;
+	m_showPowerCooldownTimers = TRUE;
+	m_showArmyCounter = TRUE;
+	m_showIdleWorkerCount = TRUE;
 
 	m_gameWindowTransitionSpeedMultiplier = 1.0f;
 
@@ -1231,6 +1236,10 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_playerInfoListFontSize = optionPref.getPlayerInfoListFontSize();
 	TheWritableGlobalData->m_showMoneyPerMinute = optionPref.getShowMoneyPerMinute();
 	TheWritableGlobalData->m_healthBarMode = optionPref.getHealthBarMode();
+	TheWritableGlobalData->m_showExperienceBars = optionPref.getShowExperienceBars();
+	TheWritableGlobalData->m_showPowerCooldownTimers = optionPref.getShowPowerCooldownTimers();
+	TheWritableGlobalData->m_showArmyCounter = optionPref.getShowArmyCounter();
+	TheWritableGlobalData->m_showIdleWorkerCount = optionPref.getShowIdleWorkerCount();
 	TheWritableGlobalData->m_gameWindowTransitionSpeedMultiplier = optionPref.getGameWindowTransitionSpeedMultiplier();
 
 	TheWritableGlobalData->m_antiAliasLevel = optionPref.getAntiAliasing();
