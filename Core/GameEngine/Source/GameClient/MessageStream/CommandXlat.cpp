@@ -64,6 +64,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Shell.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/SelectionInfo.h"
 #include "GameClient/SelectionXlat.h"
 #include "GameClient/LineFormationPreview.h"
@@ -999,6 +1000,79 @@ static Object *iNeedAHero()
 
 	return heroHolder.hero;
 
+}
+
+//------------------------------------------------------------------------------------
+/**
+ * TheSuperHackers @feature Shift order queue. If Shift is held, mark the order that was just
+ * appended to the stream (after 'lastMessageBefore') as queued, so that the units do it after
+ * their current orders.
+ */
+static void markOrderQueuedIfShiftHeld( GameMessage *lastMessageBefore )
+{
+#if RTS_ZEROHOUR
+	if( TheKeyboard == nullptr || !TheKeyboard->isShift() )
+		return;
+
+	GameMessage *msg = TheMessageStream->getLastMessage();
+	if( msg == nullptr || msg == lastMessageBefore )
+		return;
+
+	switch( msg->getType() )
+	{
+		case GameMessage::MSG_DO_MOVETO:
+		case GameMessage::MSG_DO_FORCEMOVETO:
+		case GameMessage::MSG_DO_ATTACKMOVETO:
+		case GameMessage::MSG_DO_ATTACK_OBJECT:
+		case GameMessage::MSG_DO_FORCE_ATTACK_OBJECT:
+		case GameMessage::MSG_DO_FORCE_ATTACK_GROUND:
+			if( msg->getArgumentCount() == 1 )
+				msg->appendBooleanArgument( TRUE );
+			break;
+		default:
+			break;
+	}
+#endif
+}
+
+//------------------------------------------------------------------------------------
+/**
+ * TheSuperHackers @feature Start targeting an attack-move or a patrol for the selected units.
+ */
+Bool enterOrderTargetingMode( GUICommandType command )
+{
+#if !RTS_ZEROHOUR
+	if( command == GUI_COMMAND_PATROL )
+		return FALSE;
+#endif
+
+	if( TheInGameUI == nullptr || TheControlBar == nullptr || TheGameLogic == nullptr || !TheGameLogic->isInGame() )
+		return FALSE;
+
+	if( TheInGameUI->getSelectCount() == 0 || !TheInGameUI->areSelectedObjectsControllable() )
+		return FALSE;
+
+	// at least one selected unit must be able to move
+	Bool anyMobile = FALSE;
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( obj && obj->isMobile() && obj->getAI() )
+		{
+			anyMobile = TRUE;
+			break;
+		}
+	}
+	if( !anyMobile )
+		return FALSE;
+
+	const CommandButton *button = TheControlBar->getOrderModeCommandButton( command );
+	if( button == nullptr )
+		return FALSE;
+
+	TheInGameUI->setGUICommand( button );
+	return TRUE;
 }
 
 //------------------------------------------------------------------------------------
@@ -3691,6 +3765,18 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			TheInGameUI->toggleAttackMoveToMode();
 			break;
 
+		//-----------------------------------------------------------------------------------------
+		case GameMessage::MSG_META_ATTACK_MOVE_MODE:
+			enterOrderTargetingMode( GUI_COMMAND_ATTACK_MOVE );
+			disp = DESTROY_MESSAGE;
+			break;
+
+		//-----------------------------------------------------------------------------------------
+		case GameMessage::MSG_META_PATROL_MODE:
+			enterOrderTargetingMode( GUI_COMMAND_PATROL );
+			disp = DESTROY_MESSAGE;
+			break;
+
 		case GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_LEFT:
 			DEBUG_ASSERTCRASH(!TheInGameUI->isCameraRotatingLeft(), ("Setting rotate camera left, but it's already set!"));
 			TheInGameUI->setCameraRotateLeft( true );
@@ -4280,11 +4366,13 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 						draw = nullptr;
 					}
 
+					GameMessage *lastMessageBefore = TheMessageStream->getLastMessage();
 					if (TheInGameUI->isInForceAttackMode()) {
 						evaluateForceAttack( draw, &pos, DO_COMMAND );
 					} else {
 						evaluateContextCommand( draw, &pos, DO_COMMAND );
 					}
+					markOrderQueuedIfShiftHeld( lastMessageBefore );
 
 					disp = DESTROY_MESSAGE;
 					TheInGameUI->clearAttackMoveToMode();
@@ -4361,11 +4449,14 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 					draw = nullptr;
 				}
 
+				GameMessage *lastMessageBefore = TheMessageStream->getLastMessage();
 				if (TheInGameUI->isInForceAttackMode()) {
 					evaluateForceAttack( draw, &pos, DO_COMMAND );
 				} else {
 					evaluateContextCommand( draw, &pos, DO_COMMAND );
 				}
+				if( !isFiringGUICommand )
+					markOrderQueuedIfShiftHeld( lastMessageBefore );
 
 				disp = DESTROY_MESSAGE;
 				TheInGameUI->clearAttackMoveToMode();

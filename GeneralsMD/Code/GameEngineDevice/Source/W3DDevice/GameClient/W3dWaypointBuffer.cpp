@@ -67,7 +67,9 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Keyboard.h"
 
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 
 #include "GameLogic/Module/AIUpdate.h"
@@ -159,7 +161,16 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 
 
 
-	if( TheInGameUI->isInWaypointMode() )
+	// TheSuperHackers @feature Show the route of the selected units, including the Shift order queue
+	// and patrol routes, while plotting waypoints (Alt), while holding Shift, or while targeting an
+	// attack-move or a patrol.
+	const CommandButton *pendingCommand = TheInGameUI->getGUICommand();
+	const Bool showRoutes = TheInGameUI->isInWaypointMode() ||
+		(TheKeyboard != nullptr && TheKeyboard->isShift()) ||
+		(pendingCommand != nullptr && (pendingCommand->getCommandType() == GUI_COMMAND_ATTACK_MOVE ||
+																	 pendingCommand->getCommandType() == GUI_COMMAND_PATROL));
+
+	if( showRoutes )
 	{
 		//Create a default light environment with no lights and only full ambient.
 		//@todo: Fix later by copying default scene light environment from W3DScene.cpp.
@@ -176,38 +187,85 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 		{
 			draw = *it;
 			Object *obj = draw->getObject();
-			Int numPoints = 1;
-			if( obj && ! obj->isKindOf( KINDOF_IGNORED_IN_GUI ))//so mobs and stuff sont make a gazillion lines
+			if( !obj || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )//so mobs and stuff sont make a gazillion lines
+				continue;
+			if( obj->getControllingPlayer() != rts::getObservedOrLocalPlayer() )
+				continue;
+
+			AIUpdateInterface *ai = obj->getAI();
+			if( !ai )
+				continue;
+
+			Int numPoints = 0;
+			const Coord3D *pos = obj->getPosition();
+			points[ numPoints++ ].Set( Vector3( pos->x, pos->y, pos->z ) );
+
+			// the current path (Alt waypoints and queued moves) ...
+			Int goalSize = ai->friend_getWaypointGoalPathSize();
+			Int gpIdx = ai->friend_getCurrentGoalPathIndex();
+			if( gpIdx >= 0 && gpIdx < goalSize )
 			{
-				AIUpdateInterface *ai = obj->getAI();
-				Int goalSize = ai ? ai->friend_getWaypointGoalPathSize() : 0;
-				Int gpIdx = ai ? ai->friend_getCurrentGoalPathIndex() : 0;
-				if( ai && gpIdx >= 0 && gpIdx < goalSize )
+				for( int i = gpIdx; i < goalSize && numPoints < MAX_DISPLAY_NODES + 1; i++ )
 				{
-					const Coord3D *pos = obj->getPosition();
-					points[ 0 ].Set( Vector3( pos->x, pos->y, pos->z ) );
-
-					for( int i = gpIdx; i < goalSize; i++ )
-					{
-						const Coord3D *waypoint = ai->friend_getGoalPathPosition( i );
-						if( waypoint )
-						{
-							//Render line from previous point to current node.
-
-							if( numPoints < MAX_DISPLAY_NODES + 1 )
-							{
-								points[ numPoints ].Set( Vector3( waypoint->x, waypoint->y, waypoint->z ) );
-								numPoints++;
-							}
-
-							m_waypointNodeRobj->Set_Position(Vector3(waypoint->x,waypoint->y,waypoint->z));
-							WW3D::Render(*m_waypointNodeRobj,localRinfo);
-						}
-					}
-					//Now render the lines in one pass!
-					m_line->Set_Points( numPoints, points );
-					m_line->Render( localRinfo );
+					const Coord3D *waypoint = ai->friend_getGoalPathPosition( i );
+					if( waypoint )
+						points[ numPoints++ ].Set( Vector3( waypoint->x, waypoint->y, waypoint->z ) );
 				}
+			}
+			// ... or the current destination, if the unit is busy with an order that has more queued behind it
+			else if( ai->getPlayerOrderCount() > 0 && (ai->isMoving() || ai->isWaitingForPath()) )
+			{
+				const Coord3D *goal = ai->getGoalPosition();
+				if( goal && goal->length() > 1.0f )
+					points[ numPoints++ ].Set( Vector3( goal->x, goal->y, goal->z ) );
+			}
+
+			// the Shift order queue
+			for( Int i = 0; i < ai->getPlayerOrderCount() && numPoints < MAX_DISPLAY_NODES + 1; ++i )
+			{
+				const AIUpdateInterface::PlayerOrder *order = ai->getPlayerOrder( i );
+				Coord3D orderPos = order->m_pos;
+				if( order->m_type == PLAYER_ORDER_ATTACK_OBJECT || order->m_type == PLAYER_ORDER_FORCE_ATTACK_OBJECT )
+				{
+					const Object *target = TheGameLogic->findObjectByID( order->m_targetID );
+					if( !target )
+						continue;
+					orderPos = *target->getPosition();
+				}
+				points[ numPoints++ ].Set( Vector3( orderPos.x, orderPos.y, orderPos.z ) );
+			}
+
+			if( numPoints >= 2 )
+			{
+				for( Int i = 1; i < numPoints; ++i )
+				{
+					m_waypointNodeRobj->Set_Position( points[ i ] );
+					WW3D::Render( *m_waypointNodeRobj, localRinfo );
+				}
+				//Now render the lines in one pass!
+				m_line->Set_Points( numPoints, points );
+				m_line->Render( localRinfo );
+			}
+
+			// the patrol route, drawn as a closed loop in its own color
+			const Int routeSize = ai->getPatrolRouteSize();
+			if( routeSize >= 2 )
+			{
+				Int routePoints = 0;
+				for( Int i = 0; i <= routeSize && routePoints < MAX_DISPLAY_NODES + 1; ++i )
+				{
+					const Coord3D *routePos = ai->getPatrolRoutePoint( i % routeSize );
+					points[ routePoints++ ].Set( Vector3( routePos->x, routePos->y, routePos->z ) );
+					if( i < routeSize )
+					{
+						m_waypointNodeRobj->Set_Position( points[ routePoints - 1 ] );
+						WW3D::Render( *m_waypointNodeRobj, localRinfo );
+					}
+				}
+				m_line->Set_Color( Vector3( 1.0f, 0.6f, 0.1f ) );
+				m_line->Set_Points( routePoints, points );
+				m_line->Render( localRinfo );
+				setDefaultLineStyle();
 			}
 		}
 	}

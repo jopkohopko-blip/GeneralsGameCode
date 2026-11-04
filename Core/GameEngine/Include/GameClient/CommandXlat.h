@@ -162,3 +162,7 @@ public:
 };
 
 extern void pickAndPlayUnitVoiceResponse( const DrawableList *list, GameMessage::Type msgType, PickAndPlayInfo *info = nullptr );
+
+/// TheSuperHackers @feature Start targeting an attack-move (GUI_COMMAND_ATTACK_MOVE) or a patrol (GUI_COMMAND_PATROL)
+/// for the selected units. Returns FALSE if nothing selected can take the order.
+extern Bool enterOrderTargetingMode( GUICommandType command );

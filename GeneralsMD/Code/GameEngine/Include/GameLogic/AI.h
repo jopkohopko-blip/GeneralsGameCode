@@ -412,6 +412,19 @@ enum AICommandType CPP_11(: Int)	// Stored in save file, do not reorder/renumber
 	AICMD_GUARD_RETALIATE,
 };
 
+// TheSuperHackers @feature Orders that the player can queue with Shift, and patrol.
+enum PlayerOrderType CPP_11(: Int)
+{
+	PLAYER_ORDER_MOVE,
+	PLAYER_ORDER_FORCE_MOVE,
+	PLAYER_ORDER_ATTACK_MOVE,
+	PLAYER_ORDER_ATTACK_OBJECT,
+	PLAYER_ORDER_FORCE_ATTACK_OBJECT,
+	PLAYER_ORDER_ATTACK_POSITION,
+	PLAYER_ORDER_GUARD_POSITION,
+	PLAYER_ORDER_PATROL,
+};
+
 struct AICommandParms
 {
 	AICommandType						m_cmd;
@@ -924,6 +937,7 @@ public:
 	void groupAttackTeam( const Team *team, Int maxShotsToFire, CommandSourceType cmdSource );							///< attack the given team
 	void groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );						///< attack given spot
 	void groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );	///< Attack move to the location
+	void groupIssuePlayerOrder( PlayerOrderType type, const Coord3D *pos, ObjectID targetID, Bool queued );	///< TheSuperHackers @feature Shift order queue and patrol
 	void groupHunt( CommandSourceType cmdSource );														///< begin "seek and destroy"
 	void groupRepair( Object *obj, CommandSourceType cmdSource );						///< repair the given object
 	void groupResumeConstruction( Object *obj, CommandSourceType cmdSource );	///< resume construction on the object

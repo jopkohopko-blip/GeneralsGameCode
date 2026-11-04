@@ -287,6 +287,9 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_retryPath = FALSE;
 	m_isInUpdate = FALSE;
 	m_fixLocoInPostProcess = FALSE;
+	m_patrolIndex = 0;
+	m_nextPatrolLegFrame = 0;
+	m_executingPlayerOrder = FALSE;
 
 	// ---------------------------------------------
 
@@ -1140,6 +1143,14 @@ UpdateSleepTime AIUpdateInterface::update()
 
 	m_isInUpdate = FALSE;
 
+	// TheSuperHackers @feature Shift order queue and patrol. Start the next order once the current one is done.
+	if (hasPlayerOrders())
+	{
+		if (!isAiInDeadState() && !obj->isEffectivelyDead() && isIdle())
+			processPlayerOrders();
+		subMachineSleep = UPDATE_SLEEP_NONE;
+	}
+
 	if (m_completedWaypoint != nullptr)
 	{
 		// sleep NONE here so that it will get reset next frame.
@@ -1196,6 +1207,197 @@ void AIUpdateInterface::clearWaypointQueue()
 {
 	m_waypointCount = 0;
 	m_executingWaypointQueue = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+// TheSuperHackers @feature Shift order queue and patrol
+//-------------------------------------------------------------------------------------------------
+void AIUpdateInterface::clearPlayerOrders()
+{
+	m_playerOrders.clear();
+	m_patrolRoute.clear();
+	m_patrolIndex = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/**
+ * Give this unit an order from the player. When 'queued' is set (Shift held), the order waits
+ * until the unit has finished what it is doing and everything queued before it. A patrol order
+ * sends the unit back and forth between where the patrol started and the patrol points.
+ */
+void AIUpdateInterface::issuePlayerOrder( PlayerOrderType type, const Coord3D *pos, ObjectID targetID, Bool queued )
+{
+	if (isAiInDeadState())
+		return;
+
+	PlayerOrder order;
+	order.m_type = type;
+	order.m_pos = pos ? *pos : *getObject()->getPosition();
+	order.m_targetID = targetID;
+
+	if (!queued)
+	{
+		// a fresh order replaces everything
+		clearPlayerOrders();
+		m_playerOrders.push_back( order );
+		processPlayerOrders();
+		return;
+	}
+
+	// Shift + patrol while already patrolling adds a point to the route.
+	if (type == PLAYER_ORDER_PATROL && m_playerOrders.empty() && !m_patrolRoute.empty())
+	{
+		if ((Int)m_patrolRoute.size() < MAX_PLAYER_ORDERS)
+			m_patrolRoute.push_back( order.m_pos );
+		return;
+	}
+
+	// Shift + move while simply moving extends the current path, so that the unit does not stop
+	// at every point.
+	if (type == PLAYER_ORDER_MOVE && m_playerOrders.empty() && m_patrolRoute.empty() &&
+			getLastCommandSource() == CMD_FROM_PLAYER &&
+			(getAIStateType() == AI_MOVE_TO || getAIStateType() == AI_FOLLOW_PATH) &&
+			(isMoving() || isWaitingForPath()))
+	{
+		m_executingPlayerOrder = TRUE;
+		aiFollowPathAppend( &order.m_pos, CMD_FROM_PLAYER );
+		m_executingPlayerOrder = FALSE;
+		return;
+	}
+
+	if ((Int)m_playerOrders.size() >= MAX_PLAYER_ORDERS)
+		return;
+
+	m_playerOrders.push_back( order );
+
+	// an idle unit starts at once
+	if (m_patrolRoute.empty() && isIdle())
+		processPlayerOrders();
+	else
+		setWakeFrame( getObject(), UPDATE_SLEEP_NONE );
+}
+
+//-------------------------------------------------------------------------------------------------
+void AIUpdateInterface::processPlayerOrders()
+{
+	while (!m_playerOrders.empty())
+	{
+		m_patrolRoute.clear();
+
+		const PlayerOrderType type = m_playerOrders.front().m_type;
+
+		if (type == PLAYER_ORDER_PATROL)
+		{
+			// consecutive patrol points make up one patrol route, starting from where we are now
+			m_patrolRoute.push_back( *getObject()->getPosition() );
+			while (!m_playerOrders.empty() && m_playerOrders.front().m_type == PLAYER_ORDER_PATROL)
+			{
+				m_patrolRoute.push_back( m_playerOrders.front().m_pos );
+				m_playerOrders.erase( m_playerOrders.begin() );
+			}
+			m_patrolIndex = 0;
+			m_nextPatrolLegFrame = 0;
+			startNextPatrolLeg();
+			return;
+		}
+
+		if (type == PLAYER_ORDER_MOVE)
+		{
+			// consecutive moves make up one path, so that the unit does not stop at every point
+			std::vector<Coord3D> path;
+			while (!m_playerOrders.empty() && m_playerOrders.front().m_type == PLAYER_ORDER_MOVE)
+			{
+				path.push_back( m_playerOrders.front().m_pos );
+				m_playerOrders.erase( m_playerOrders.begin() );
+			}
+			m_executingPlayerOrder = TRUE;
+			aiFollowPath( &path, nullptr, CMD_FROM_PLAYER );
+			m_executingPlayerOrder = FALSE;
+			return;
+		}
+
+		const PlayerOrder order = m_playerOrders.front();
+		m_playerOrders.erase( m_playerOrders.begin() );
+
+		m_executingPlayerOrder = TRUE;
+		const Bool started = executePlayerOrder( order );
+		m_executingPlayerOrder = FALSE;
+
+		if (started)
+			return;
+		// the target of this order is gone, try the next one
+	}
+
+	if (m_patrolRoute.size() >= 2)
+		startNextPatrolLeg();
+	else
+		m_patrolRoute.clear();
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AIUpdateInterface::executePlayerOrder( const PlayerOrder &order )
+{
+	switch (order.m_type)
+	{
+		case PLAYER_ORDER_FORCE_MOVE:
+			aiMoveToPosition( &order.m_pos, CMD_FROM_PLAYER );
+			return TRUE;
+
+		case PLAYER_ORDER_ATTACK_MOVE:
+			aiAttackMoveToPosition( &order.m_pos, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+			return TRUE;
+
+		case PLAYER_ORDER_ATTACK_OBJECT:
+		case PLAYER_ORDER_FORCE_ATTACK_OBJECT:
+		{
+			Object *victim = TheGameLogic->findObjectByID( order.m_targetID );
+			if (victim == nullptr || victim->isEffectivelyDead())
+				return FALSE;
+			if (order.m_type == PLAYER_ORDER_FORCE_ATTACK_OBJECT)
+				aiForceAttackObject( victim, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+			else
+				aiAttackObject( victim, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+			return TRUE;
+		}
+
+		case PLAYER_ORDER_ATTACK_POSITION:
+			aiAttackPosition( &order.m_pos, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+			return TRUE;
+
+		case PLAYER_ORDER_GUARD_POSITION:
+			aiGuardPosition( &order.m_pos, GUARDMODE_NORMAL, CMD_FROM_PLAYER );
+			return TRUE;
+
+		case PLAYER_ORDER_MOVE:
+		case PLAYER_ORDER_PATROL:
+		default:
+			// handled by processPlayerOrders
+			break;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void AIUpdateInterface::startNextPatrolLeg()
+{
+	if (m_patrolRoute.size() < 2)
+	{
+		m_patrolRoute.clear();
+		return;
+	}
+
+	// don't spin if a leg ends right away (e.g. the point cannot be reached)
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if (now < m_nextPatrolLegFrame)
+		return;
+	m_nextPatrolLegFrame = now + LOGICFRAMES_PER_SECOND;
+
+	m_patrolIndex = (m_patrolIndex + 1) % (Int)m_patrolRoute.size();
+	const Coord3D dest = m_patrolRoute[m_patrolIndex];
+
+	m_executingPlayerOrder = TRUE;
+	aiAttackMoveToPosition( &dest, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+	m_executingPlayerOrder = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2670,6 +2872,9 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 
 	// TheSuperHackers @feature Any new order ends a formation move.
 	clearFormationMoveState();
+	// TheSuperHackers @feature A new order from the player replaces the Shift order queue and the patrol.
+	if (parms->m_cmdSource == CMD_FROM_PLAYER && !m_executingPlayerOrder)
+		clearPlayerOrders();
 
 #ifdef ALLOW_SURRENDER
 	// surrendered items have very limited options, and only via AI cmds

@@ -351,6 +351,82 @@ void GameLogic::prepareNewGame( GameMode gameMode, GameDifficulty diff, Int rank
 
 }
 
+#if RTS_ZEROHOUR
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Shift order queue and patrol. Return TRUE if the message was a queued
+	* order (or a patrol order) and has been handed to the selected units. */
+//-------------------------------------------------------------------------------------------------
+static Bool isQueuedOrderMessage( const GameMessage *msg, Int argCount )
+{
+	return msg->getArgumentCount() > argCount &&
+		msg->getArgumentDataType( argCount ) == ARGUMENTDATATYPE_BOOLEAN &&
+		msg->getArgument( argCount )->boolean;
+}
+
+static Bool issuePlayerOrderFromMessage( const GameMessage *msg, AIGroupPtr &group )
+{
+	PlayerOrderType type;
+	Coord3D pos;
+	ObjectID targetID = INVALID_ID;
+	Int argCount = 1;
+
+	switch( msg->getType() )
+	{
+		case GameMessage::MSG_DO_PATROL:
+			type = PLAYER_ORDER_PATROL;
+			break;
+		case GameMessage::MSG_DO_MOVETO:
+			type = PLAYER_ORDER_MOVE;
+			break;
+		case GameMessage::MSG_DO_FORCEMOVETO:
+			type = PLAYER_ORDER_FORCE_MOVE;
+			break;
+		case GameMessage::MSG_DO_ATTACKMOVETO:
+			type = PLAYER_ORDER_ATTACK_MOVE;
+			break;
+		case GameMessage::MSG_DO_ATTACK_OBJECT:
+			type = PLAYER_ORDER_ATTACK_OBJECT;
+			break;
+		case GameMessage::MSG_DO_FORCE_ATTACK_OBJECT:
+			type = PLAYER_ORDER_FORCE_ATTACK_OBJECT;
+			break;
+		case GameMessage::MSG_DO_FORCE_ATTACK_GROUND:
+			type = PLAYER_ORDER_ATTACK_POSITION;
+			break;
+		case GameMessage::MSG_DO_GUARD_POSITION:
+			type = PLAYER_ORDER_GUARD_POSITION;
+			argCount = 2;
+			break;
+		default:
+			return FALSE;
+	}
+
+	const Bool queued = isQueuedOrderMessage( msg, argCount );
+	if( !queued && type != PLAYER_ORDER_PATROL )
+		return FALSE;
+
+	if( msg->getArgumentCount() < 1 )
+		return TRUE;
+
+	if( type == PLAYER_ORDER_ATTACK_OBJECT || type == PLAYER_ORDER_FORCE_ATTACK_OBJECT )
+	{
+		targetID = msg->getArgument( 0 )->objectID;
+		Object *target = TheGameLogic->findObjectByID( targetID );
+		if( target == nullptr )
+			return TRUE;
+		pos = *target->getPosition();
+	}
+	else
+	{
+		pos = msg->getArgument( 0 )->location;
+	}
+
+	group->releaseWeaponLockForGroup( LOCKED_TEMPORARILY );
+	group->groupIssuePlayerOrder( type, &pos, targetID, queued );
+	return TRUE;
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------
 /** This message handles dispatches object command messages to the
   * appropriate objects.
@@ -430,6 +506,14 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 
 	// process the message
 	GameMessage::Type msgType = msg->getType();
+
+#if RTS_ZEROHOUR
+	// TheSuperHackers @feature Shift order queue and patrol. Orders sent with Shift held carry a
+	// trailing TRUE and wait behind the units' current orders.
+	if (currentlySelectedGroup && issuePlayerOrderFromMessage(msg, currentlySelectedGroup))
+		msgType = GameMessage::MSG_INVALID; // handled, skip the regular processing below
+#endif
+
 	switch( msgType )
 	{
 		case GameMessage::MSG_CLEAR_GAME_DATA:

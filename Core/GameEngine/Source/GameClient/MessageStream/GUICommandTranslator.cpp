@@ -45,6 +45,7 @@
 #include "GameClient/GameText.h"
 #include "Common/Geometry.h"
 #include "GameClient/GUICommandTranslator.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/CommandXlat.h"
 
 
@@ -81,6 +82,20 @@ GUICommandTranslator::~GUICommandTranslator()
 
 //-------------------------------------------------------------------------------------------------
 /** Is the object under the mouse position a valid target for the command */
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Shift order queue: holding Shift queues the order behind the current
+	* ones and keeps the targeting mode active for the next point. */
+//-------------------------------------------------------------------------------------------------
+static Bool isOrderQueueModifierHeld()
+{
+#if RTS_ZEROHOUR
+	return TheKeyboard != nullptr && TheKeyboard->isShift();
+#else
+	return FALSE;
+#endif
+}
+
 //-------------------------------------------------------------------------------------------------
 static Object *validUnderCursor( const ICoord2D *mouse, const CommandButton *command, PickType pickType )
 {
@@ -247,6 +262,8 @@ static CommandStatus doGuardCommand( const CommandButton *command, GuardMode gua
 		msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_GUARD_POSITION );
 		msg->appendLocationArgument(world);
 		msg->appendIntegerArgument(guardMode);
+		if( guardMode == GUARDMODE_NORMAL && isOrderQueueModifierHeld() )
+			msg->appendBooleanArgument( TRUE );
 		pickAndPlayUnitVoiceResponse(TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_GUARD_POSITION);
 	}
 
@@ -284,11 +301,43 @@ static CommandStatus doAttackMoveCommand( const CommandButton *command, const IC
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACKMOVETO );
 	msg->appendLocationArgument( world );
 
+	const Bool queued = isOrderQueueModifierHeld();
+	if( queued )
+		msg->appendBooleanArgument( TRUE );
+
 	// Play the unit voice response
 	pickAndPlayUnitVoiceResponse(TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_ATTACKMOVETO);
 
-	return COMMAND_COMPLETE;
+	return queued ? COMMAND_INCOMPLETE : COMMAND_COMPLETE;
 
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Patrol between the selected units and the clicked point. With Shift
+	* held, more points are added to the patrol route. */
+//-------------------------------------------------------------------------------------------------
+static CommandStatus doPatrolCommand( const CommandButton *command, const ICoord2D *mouse )
+{
+	if( command == nullptr || mouse == nullptr )
+		return COMMAND_COMPLETE;
+
+	if( TheInGameUI->getSelectCount() == 0 )
+		return COMMAND_COMPLETE;
+
+	Coord3D world;
+	if( !TheTacticalView->screenToTerrain( mouse, &world ) )
+		return COMMAND_COMPLETE;
+
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_PATROL );
+	msg->appendLocationArgument( world );
+
+	const Bool queued = isOrderQueueModifierHeld();
+	if( queued )
+		msg->appendBooleanArgument( TRUE );
+
+	pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_ATTACKMOVETO );
+
+	return queued ? COMMAND_INCOMPLETE : COMMAND_COMPLETE;
 }
 
 
@@ -465,6 +514,12 @@ GameMessageDisposition GUICommandTranslator::translateGameMessage(const GameMess
 					case GUI_COMMAND_ATTACK_MOVE:
 					{
 						commandStatus = doAttackMoveCommand( command, &mouse );
+						break;
+					}
+
+					case GUI_COMMAND_PATROL:
+					{
+						commandStatus = doPatrolCommand( command, &mouse );
 						break;
 					}
 

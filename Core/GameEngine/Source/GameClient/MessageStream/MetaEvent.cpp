@@ -164,6 +164,8 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "STANCE_AGGRESSIVE",												GameMessage::MSG_META_STANCE_AGGRESSIVE },
 	{ "STANCE_HOLD_POSITION",											GameMessage::MSG_META_STANCE_HOLD_POSITION },
 	{ "STANCE_HOLD_FIRE",													GameMessage::MSG_META_STANCE_HOLD_FIRE },
+	{ "ATTACK_MOVE_MODE",													GameMessage::MSG_META_ATTACK_MOVE_MODE },
+	{ "PATROL_MODE",															GameMessage::MSG_META_PATROL_MODE },
 	{ "BEGIN_PATH_BUILD",													GameMessage::MSG_META_BEGIN_PATH_BUILD },
 	{ "END_PATH_BUILD",														GameMessage::MSG_META_END_PATH_BUILD },
 	{ "BEGIN_FORCEATTACK",												GameMessage::MSG_META_BEGIN_FORCEATTACK },

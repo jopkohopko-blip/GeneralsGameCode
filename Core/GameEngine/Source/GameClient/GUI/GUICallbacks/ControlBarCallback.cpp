@@ -47,6 +47,7 @@
 #include "GameClient/GameClient.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/LanguageFilter.h"
@@ -58,6 +59,18 @@
 //external declarations of the Gadgets the callbacks can use
 WindowLayout *popupCommunicatorLayout = nullptr;
 
+
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Shift order queue: Shift queues orders given on the radar too. */
+//-------------------------------------------------------------------------------------------------
+static Bool isOrderQueueModifierHeld()
+{
+#if RTS_ZEROHOUR
+	return TheKeyboard != nullptr && TheKeyboard->isShift();
+#else
+	return FALSE;
+#endif
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Input procedure for the left HUD */
@@ -285,8 +298,20 @@ WindowMsgHandledType LeftHUDInput( GameWindow *window, UnsignedInt msg,
 
 					GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACKMOVETO );
 					msg->appendLocationArgument( world );
+					if( isOrderQueueModifierHeld() )
+						msg->appendBooleanArgument( TRUE );
 
 					// Play the unit voice response
+					pickAndPlayUnitVoiceResponse(TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_ATTACKMOVETO);
+				}
+				else if( command && command->getCommandType() == GUI_COMMAND_PATROL )
+				{
+					// TheSuperHackers @feature Patrol to a point picked on the radar
+					GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_PATROL );
+					msg->appendLocationArgument( world );
+					if( isOrderQueueModifierHeld() )
+						msg->appendBooleanArgument( TRUE );
+
 					pickAndPlayUnitVoiceResponse(TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_ATTACKMOVETO);
 				}
 				else
@@ -307,6 +332,8 @@ WindowMsgHandledType LeftHUDInput( GameWindow *window, UnsignedInt msg,
 
 					newMsg = TheMessageStream->appendMessage(GameMessage::MSG_DO_MOVETO);
 					newMsg->appendLocationArgument(world);
+					if( isOrderQueueModifierHeld() )
+						newMsg->appendBooleanArgument( TRUE );
 					// Play the unit voice response
 					pickAndPlayUnitVoiceResponse(drawableList, GameMessage::MSG_DO_MOVETO);
 
