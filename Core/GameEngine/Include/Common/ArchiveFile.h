@@ -62,6 +62,10 @@ public:
 
 	void									addFile(const AsciiString& path, const ArchivedFileInfo *fileInfo); ///< add this file to our directory tree.
 
+	// TheSuperHackers @feature Mods folder: an "archive" whose files are loose files on disk below this folder.
+	void									setLooseFileRoot(const AsciiString& root) { m_looseFileRoot = root; }
+	Bool									isLooseFileArchive() const { return m_looseFileRoot.isNotEmpty(); }
+
 protected:
 	void									getFileListInDirectory(const DetailedArchivedDirectoryInfo *dirInfo, const AsciiString& currentDirectory, const AsciiString& searchName, FilenameList &filenameList, Bool searchSubdirectories) const;
 	const ArchivedFileInfo *		getArchivedFileInfo(const AsciiString& filename) const;	///< return the ArchivedFileInfo from the directory tree.
@@ -71,6 +75,7 @@ protected:
 	FileInfo m_fileInfo; ///< file info of the archive file on disk.
 	AsciiString m_name; ///< archive file name
 	AsciiString m_path; ///< archive file path
+	AsciiString m_looseFileRoot; ///< if set, files are read from this disk folder instead of m_file
 
 private:
 	DetailedArchivedDirectoryInfo m_rootDirectory;
