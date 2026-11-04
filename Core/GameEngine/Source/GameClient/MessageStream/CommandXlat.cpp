@@ -65,8 +65,10 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/SelectionInfo.h"
 #include "GameClient/SelectionXlat.h"
+#include "GameClient/LineFormationPreview.h"
 
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/LineFormation.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -1042,6 +1044,9 @@ GameMessage::Type CommandTranslator::issueMoveToLocationCommand( const Coord3D *
 			else
 				movemsg->appendLocationArgument( *pos );
 
+			// TheSuperHackers @feature Tell the logic to keep the group together (the setting is local).
+			if (msgType == GameMessage::MSG_DO_MOVETO)
+				movemsg->appendBooleanArgument( TheGlobalData->m_formationMoveTogether );
 		}
 	}
 
@@ -1461,10 +1466,139 @@ CommandTranslator::CommandTranslator() :
 	m_objective(0),
 	m_teamExists(false),
 	m_rightMouseDownTimeMs(0),
-	m_rightMouseUpTimeMs(0)
+	m_rightMouseUpTimeMs(0),
+	m_formationDragArmed(FALSE),
+	m_formationDragActive(FALSE),
+	m_formationDragIssuedUpTimeMs(0)
 {
 	m_rightMouseDownAnchor.zero();
 	m_rightMouseUpAnchor.zero();
+	m_formationDragAnchor.zero();
+	m_formationDragStart.zero();
+	m_formationDragEnd.zero();
+}
+
+//-------------------------------------------------------------------------------------------------
+// TheSuperHackers @feature Line formation drag. In right click order mode, holding the right
+// mouse button on the ground and dragging draws a line; on release the selected units line up
+// along it and face away from where they came from.
+//-------------------------------------------------------------------------------------------------
+void CommandTranslator::armFormationDrag( const ICoord2D &pixel )
+{
+	cancelFormationDrag();
+
+	if (!TheGlobalData->m_formationDrag || !TheGlobalData->m_useAlternateMouse)
+		return;
+
+	// Right mouse drag scrolls the camera instead.
+	if (TheGlobalData->m_useRightMouseScrollWithAlternateMouse)
+		return;
+
+	if (TheTacticalView == nullptr || TheInGameUI == nullptr)
+		return;
+
+	// Only a plain move order: no special command modes.
+	if (TheInGameUI->getGUICommand() || TheInGameUI->isInForceAttackMode() || TheInGameUI->isInWaypointMode() ||
+		TheInGameUI->isInAttackMoveToMode() || TheInGameUI->getPendingPlaceSourceObjectID() != INVALID_ID)
+		return;
+
+	if (!TheInGameUI->areSelectedObjectsControllable())
+		return;
+
+	// Need at least one unit that can stand in a line.
+	Bool anyUnit = FALSE;
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for (DrawableListCIt it = selected->begin(); it != selected->end(); ++it)
+	{
+		if (LineFormation::isParticipant( (*it)->getObject() ))
+		{
+			anyUnit = TRUE;
+			break;
+		}
+	}
+	if (!anyUnit)
+		return;
+
+	// Only on open ground: pressing on a unit or building is a context order (attack, enter, ...).
+	Drawable *draw = TheTacticalView->pickDrawable( &pixel, FALSE, (PickType)getPickTypesForContext( FALSE ) );
+	Object *obj = draw ? draw->getObject() : nullptr;
+	if (obj && !(obj->isEffectivelyDead() && !obj->isKindOf( KINDOF_ALWAYS_SELECTABLE )))
+		return;
+
+	if (!TheTacticalView->screenToTerrain( &pixel, &m_formationDragStart ))
+		return;
+
+	m_formationDragAnchor = pixel;
+	m_formationDragEnd = m_formationDragStart;
+	m_formationDragArmed = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void CommandTranslator::updateFormationDrag( const ICoord2D &pixel )
+{
+	if (!m_formationDragArmed)
+		return;
+
+	if (!m_formationDragActive)
+	{
+		// Start once the mouse moved further than a click allows, so clicks keep working as before.
+		const ICoord2D delta = pixel - m_formationDragAnchor;
+		const Int threshold = std::max<Int>( (Int)TheMouse->m_dragTolerance + 1, 12 );
+		if (delta.lengthSqr() <= threshold * threshold)
+			return;
+
+		m_formationDragActive = TRUE;
+	}
+
+	Coord3D pos;
+	if (TheTacticalView->screenToTerrain( &pixel, &pos ))
+		m_formationDragEnd = pos;
+
+	LineFormationPreview::show( m_formationDragStart, m_formationDragEnd );
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool CommandTranslator::finishFormationDrag( const ICoord2D &pixel, UnsignedInt upTimeMs )
+{
+	if (!m_formationDragArmed)
+		return FALSE;
+
+	updateFormationDrag( pixel );
+	const Bool active = m_formationDragActive;
+	const Coord3D start = m_formationDragStart;
+	const Coord3D end = m_formationDragEnd;
+	cancelFormationDrag();
+
+	if (!active)
+		return FALSE;
+
+	// The selection may have changed while dragging.
+	if (!TheInGameUI->areSelectedObjectsControllable())
+		return FALSE;
+
+	Int flags = 0;
+	if (TheGlobalData->m_formationSmartRoles)
+		flags |= LineFormation::FLAG_SMART_ROLES;
+	if (TheGlobalData->m_formationMoveTogether)
+		flags |= LineFormation::FLAG_MOVE_TOGETHER;
+
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_DO_FORMATION_MOVETO );
+	msg->appendLocationArgument( start );
+	msg->appendLocationArgument( end );
+	msg->appendIntegerArgument( flags );
+
+	pickAndPlayUnitVoiceResponse( TheInGameUI->getAllSelectedDrawables(), GameMessage::MSG_DO_MOVETO );
+
+	m_formationDragIssuedUpTimeMs = upTimeMs;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void CommandTranslator::cancelFormationDrag()
+{
+	m_formationDragArmed = FALSE;
+	m_formationDragActive = FALSE;
+	LineFormationPreview::hide();
 }
 
 //====================================================================================
@@ -3971,6 +4105,17 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			m_rightMouseDownAnchor = msg->getArgument( 0 )->pixel;
 			m_rightMouseDownTimeMs = (UnsignedInt) msg->getArgument( 2 )->integer;
 
+			armFormationDrag( m_rightMouseDownAnchor );
+
+			break;
+		}
+
+		//-----------------------------------------------------------------------------
+		case GameMessage::MSG_RAW_MOUSE_POSITION:
+		{
+			if (m_formationDragArmed)
+				updateFormationDrag( msg->getArgument( 0 )->pixel );
+
 			break;
 		}
 
@@ -3980,6 +4125,9 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			// register this event for determining if the click was fast or short enough not to be a drag
 			m_rightMouseUpAnchor = msg->getArgument( 0 )->pixel;
 			m_rightMouseUpTimeMs = (UnsignedInt) msg->getArgument( 2 )->integer;
+
+			if (finishFormationDrag( m_rightMouseUpAnchor, m_rightMouseUpTimeMs ))
+				break;
 
 			//Kris: July 7, 2003. Added this code to deselect build placement mode when right clicked. This fixes
 			//a bug where you couldn't cancel the sneak attack mode via right click. This only happened when you
@@ -4019,6 +4167,13 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 		}
 		case GameMessage::MSG_MOUSE_RIGHT_CLICK:
 		{
+			// TheSuperHackers @feature This button release already gave a line formation order.
+			if (m_formationDragIssuedUpTimeMs != 0 && m_formationDragIssuedUpTimeMs == m_rightMouseUpTimeMs)
+			{
+				disp = DESTROY_MESSAGE;
+				break;
+			}
+
 			// right click is only actioned here if we're in alternate mouse mode
 			if (TheGlobalData->m_useAlternateMouse &&
 				TheMouse->isClick(
