@@ -73,6 +73,8 @@
 #include "Common/GameLOD.h"
 #include "d3dx8tex.h"
 #include "WW3D2/dx8caps.h"
+#include "WW3D2/texturefilter.h"
+#include "WW3D2/ww3d.h"
 
 
 // Turn this on to turn off pixel shaders. jba[4/3/2003]
@@ -1657,10 +1659,10 @@ Int TerrainShader2Stage::set(Int pass)
 	//force WW3D2 system to set it's states so it won't later overwrite our custom settings.
 	DX8Wrapper::Apply_Render_State_Changes();
 
-	if (TheGlobalData && (TheGlobalData->m_bilinearTerrainTex || TheGlobalData->m_trilinearTerrainTex)) {
-		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+	if (W3DShaderManager::useLinearTerrainFilter()) {
+		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 	} else {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
@@ -1668,7 +1670,7 @@ Int TerrainShader2Stage::set(Int pass)
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_POINT);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_POINT);
 	}
-	if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex) {
+	if (W3DShaderManager::useTrilinearTerrainFilter()) {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 	} else {
@@ -1833,10 +1835,10 @@ Int TerrainShader8Stage::set(Int pass)
 		DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_ADDRESSU, D3DTADDRESS_CLAMP);
 		DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_ADDRESSV, D3DTADDRESS_CLAMP);
 
-		if (TheGlobalData && (TheGlobalData->m_bilinearTerrainTex || TheGlobalData->m_trilinearTerrainTex)) {
-			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+		if (W3DShaderManager::useLinearTerrainFilter()) {
+			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 		} else {
 			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
@@ -1844,7 +1846,7 @@ Int TerrainShader8Stage::set(Int pass)
 			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_POINT);
 			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_POINT);
 		}
-		if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex) {
+		if (W3DShaderManager::useTrilinearTerrainFilter()) {
 			DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 		} else {
@@ -2041,10 +2043,10 @@ Int TerrainShaderPixelShader::set(Int pass)
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_TEXCOORDINDEX, 0 );
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_TEXCOORDINDEX, 1 );
 
-	if (TheGlobalData && (TheGlobalData->m_bilinearTerrainTex || TheGlobalData->m_trilinearTerrainTex)) {
-		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+	if (W3DShaderManager::useLinearTerrainFilter()) {
+		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 	} else {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
@@ -2052,7 +2054,7 @@ Int TerrainShaderPixelShader::set(Int pass)
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_POINT);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_POINT);
 	}
-	if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex) {
+	if (W3DShaderManager::useTrilinearTerrainFilter()) {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 	} else {
@@ -2329,7 +2331,7 @@ Int RoadShaderPixelShader::set(Int pass)
 	float det;
 	D3DXMatrixInverse(&inv, &det, &curView);
 
-	if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex)
+	if (W3DShaderManager::useTrilinearTerrainFilter())
 	{	DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 	}
@@ -2445,7 +2447,7 @@ Int RoadShader2Stage::set(Int pass)
 			float det;
 			D3DXMatrixInverse(&inv, &det, &curView);
 
-			if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex)
+			if (W3DShaderManager::useTrilinearTerrainFilter())
 				DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 			else
 				DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_POINT);
@@ -2513,7 +2515,7 @@ Int RoadShader2Stage::set(Int pass)
 		float det;
 		D3DXMatrixInverse(&inv, &det, &curView);
 
-		if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex)
+		if (W3DShaderManager::useTrilinearTerrainFilter())
 			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 		else
 			DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_POINT);
@@ -2595,6 +2597,35 @@ W3DFilterInterface **MasterFilterList[]=
 	ScreenCrossFadeFilterList,
 	nullptr
 };
+
+// @feature The terrain shaders set their own texture filters, which ignored the user's texture filter
+// setting. With anisotropic filtering selected, terrain now uses anisotropic minification and
+// trilinear mip filtering, which removes the blurry and banded ground at shallow camera angles.
+// Options.ini AnisotropicTerrain = no restores the original terrain filtering.
+static Bool useAnisotropicTerrainFilter()
+{
+	if (!TheGlobalData || !TheGlobalData->m_anisotropicTerrain)
+		return FALSE;
+	if (WW3D::Get_Texture_Filter() != TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC)
+		return FALSE;
+	const D3DCAPS8 &caps = DX8Wrapper::Get_Current_Caps()->Get_DX8_Caps();
+	return (caps.TextureFilterCaps & D3DPTFILTERCAPS_MINFANISOTROPIC) != 0;
+}
+
+Bool W3DShaderManager::useLinearTerrainFilter()
+{
+	return useAnisotropicTerrainFilter() || (TheGlobalData && (TheGlobalData->m_bilinearTerrainTex || TheGlobalData->m_trilinearTerrainTex));
+}
+
+Bool W3DShaderManager::useTrilinearTerrainFilter()
+{
+	return useAnisotropicTerrainFilter() || (TheGlobalData && TheGlobalData->m_trilinearTerrainTex);
+}
+
+DWORD W3DShaderManager::getTerrainMinFilter()
+{
+	return useAnisotropicTerrainFilter() ? D3DTEXF_ANISOTROPIC : D3DTEXF_LINEAR;
+}
 
 // W3DShaderManager::W3DShaderManager =========================================
 /** Constructor - just clears some variables */
@@ -3361,10 +3392,10 @@ Int FlatTerrainShader2Stage::set(Int pass)
 	//force WW3D2 system to set it's states so it won't later overwrite our custom settings.
 	DX8Wrapper::Apply_Render_State_Changes();
 
-	if (TheGlobalData && (TheGlobalData->m_bilinearTerrainTex || TheGlobalData->m_trilinearTerrainTex)) {
-		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+	if (W3DShaderManager::useLinearTerrainFilter()) {
+		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 	} else {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
@@ -3372,7 +3403,7 @@ Int FlatTerrainShader2Stage::set(Int pass)
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MINFILTER, D3DTEXF_POINT);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MAGFILTER, D3DTEXF_POINT);
 	}
-	if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex) {
+	if (W3DShaderManager::useTrilinearTerrainFilter()) {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 	} else {
@@ -3652,14 +3683,14 @@ Int FlatTerrainShaderPixelShader::set(Int pass)
 	DX8Wrapper::Set_DX8_Texture_Stage_State( curStage, D3DTSS_TEXCOORDINDEX, 0 );
 	DX8Wrapper::Set_DX8_Texture_Stage_State(curStage,  D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 
-	if (TheGlobalData && (TheGlobalData->m_bilinearTerrainTex || TheGlobalData->m_trilinearTerrainTex)) {
-		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+	if (W3DShaderManager::useLinearTerrainFilter()) {
+		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MINFILTER, W3DShaderManager::getTerrainMinFilter());
 		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 	} else {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MINFILTER, D3DTEXF_POINT);
 		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MAGFILTER, D3DTEXF_POINT);
 	}
-	if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex) {
+	if (W3DShaderManager::useTrilinearTerrainFilter()) {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
 	} else {
 		DX8Wrapper::Set_DX8_Texture_Stage_State(curStage, D3DTSS_MIPFILTER, D3DTEXF_POINT);

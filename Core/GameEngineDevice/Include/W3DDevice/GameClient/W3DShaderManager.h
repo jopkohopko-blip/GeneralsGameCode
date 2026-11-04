@@ -107,6 +107,9 @@ public:
 
 	// Support routines for filter methods.
 	static Bool canRenderToTexture() { return (m_oldRenderSurface && m_newRenderSurface);}
+	static Bool useLinearTerrainFilter();	///< terrain uses linear (or anisotropic) min/mag filtering
+	static Bool useTrilinearTerrainFilter();	///< terrain uses linear mip filtering
+	static DWORD getTerrainMinFilter();	///< D3DTEXF_ANISOTROPIC or D3DTEXF_LINEAR
 	static void startRenderToTexture(); ///< Sets render target to texture.
 	static IDirect3DTexture8 * endRenderToTexture(); ///< Ends render to texture, & returns texture.
 	static IDirect3DTexture8 * getRenderTexture();	///< returns last used render target texture

@@ -956,6 +956,31 @@ void W3DDisplay::init()
 
 	initAssets();
 
+	// @feature Write the graphics settings the device actually accepted, so it is easy to check
+	// whether anti-aliasing and anisotropic filtering are in effect on this GPU.
+	if (!TheGlobalData->m_headless && DX8Wrapper::_Get_D3D_Device8())
+	{
+		AsciiString path = TheGlobalData->getPath_UserData();
+		path.concat("GraphicsInfo.txt");
+		FILE *fp = fopen(path.str(), "w");
+		if (fp)
+		{
+			const D3DCAPS8 &caps = DX8Wrapper::Get_Current_Caps()->Get_DX8_Caps();
+			fprintf(fp, "Resolution = %dx%d\n", getWidth(), getHeight());
+			fprintf(fp, "AntiAliasing requested = %d\n", (Int)OptionPreferences().getAntiAliasing());
+			fprintf(fp, "AntiAliasing active = %d\n", (Int)WW3D::Get_MSAA_Mode());
+			fprintf(fp, "TextureFilter active = %s\n", TextureFilterClass::TextureFilterModeString[WW3D::Get_Texture_Filter()]);
+			fprintf(fp, "AnisotropyLevel active = %d (GPU max %d)\n", (Int)WW3D::Get_Anisotropy_Level(), (Int)caps.MaxAnisotropy);
+			fprintf(fp, "AnisotropicTerrain = %s\n", TheGlobalData->m_anisotropicTerrain ? "yes" : "no");
+			const StaticGameLODLevel lodLevel = TheGameLODManager ? TheGameLODManager->getStaticLODLevel() : STATIC_GAME_LOD_UNKNOWN;
+			fprintf(fp, "StaticGameLOD = %s\n", lodLevel != STATIC_GAME_LOD_UNKNOWN ? TheGameLODManager->getStaticGameLODLevelName(lodLevel) : "unknown");
+			fprintf(fp, "ShadowVolumes = %s, ShadowDecals = %s, TextureReduction = %d\n",
+				TheGlobalData->m_useShadowVolumes ? "yes" : "no", TheGlobalData->m_useShadowDecals ? "yes" : "no", TheGlobalData->m_textureReductionFactor);
+			fprintf(fp, "Driver = %s\n", DX8Wrapper::Get_Current_Caps()->Get_Driver_Name().str());
+			fclose(fp);
+		}
+	}
+
 	if (!TheGlobalData->m_headless)
 	{
 		init2DScene();
