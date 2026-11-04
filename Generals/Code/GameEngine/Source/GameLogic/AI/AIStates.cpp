@@ -1446,7 +1446,8 @@ StateReturnType AIIdleState::update()
 			if ((moodAdjust & MAA_Affect_Range_IgnoreAll) == 0)
 			{
 				// If we're supposed to attack based on mood, etc, then we will do so.
-				Object* enemy = ai->getNextMoodTarget( true, true );
+				// TheSuperHackers @feature In the aggressive stance, idle units engage anything they can see.
+				Object* enemy = ai->getNextMoodTarget( true, true, TRUE );
 				if (enemy)
 				{
 	 				ai->aiAttackObject(enemy, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
@@ -2561,8 +2562,9 @@ StateReturnType AIAttackApproachTargetState::onEnter()
 		// we don't want to chase the unit. isAllowedToChase is set when we are in a deploy and attack state (troop crawler).
 
 		if (source->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN) {
-			if (ai->getLastCommandSource() == CMD_FROM_AI && !ai->isAllowedToChase() ) {
-				if (!weapon->isContactWeapon()) {
+			// TheSuperHackers @feature The aggressive stance allows chasing; hold position never moves, even with contact weapons.
+			if (ai->getLastCommandSource() == CMD_FROM_AI && !ai->isAllowedToChase() && !ai->isStanceAllowingChase() ) {
+				if (!weapon->isContactWeapon() || ai->getStance() == UNIT_STANCE_HOLD_POSITION) {
 					return STATE_FAILURE;
 				}
 			}
@@ -2903,7 +2905,8 @@ StateReturnType AIAttackPursueTargetState::onEnter()
 	// Check here:  If we are a player, and we got to this state via an ai command (ie we auto-acquired),
 	// we don't want to chase the unit.
 	if (source->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN) {
-		if (ai->getLastCommandSource() == CMD_FROM_AI) {
+		// TheSuperHackers @feature Units in the aggressive stance pursue targets they picked themselves.
+		if (ai->getLastCommandSource() == CMD_FROM_AI && !ai->isStanceAllowingChase()) {
 			return STATE_SUCCESS;
 		}
 	}

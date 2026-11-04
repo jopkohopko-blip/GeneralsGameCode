@@ -160,6 +160,10 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "TOGGLE_CONTROL_BAR",												GameMessage::MSG_META_TOGGLE_CONTROL_BAR },
 	{ "TOGGLE_PLAYER_OBSERVER",										GameMessage::MSG_META_TOGGLE_PLAYER_OBSERVER },
 	{ "TOGGLE_HEALTH_BARS",												GameMessage::MSG_META_TOGGLE_HEALTH_BARS },
+	{ "STANCE_NORMAL",														GameMessage::MSG_META_STANCE_NORMAL },
+	{ "STANCE_AGGRESSIVE",												GameMessage::MSG_META_STANCE_AGGRESSIVE },
+	{ "STANCE_HOLD_POSITION",											GameMessage::MSG_META_STANCE_HOLD_POSITION },
+	{ "STANCE_HOLD_FIRE",													GameMessage::MSG_META_STANCE_HOLD_FIRE },
 	{ "BEGIN_PATH_BUILD",													GameMessage::MSG_META_BEGIN_PATH_BUILD },
 	{ "END_PATH_BUILD",														GameMessage::MSG_META_END_PATH_BUILD },
 	{ "BEGIN_FORCEATTACK",												GameMessage::MSG_META_BEGIN_FORCEATTACK },
@@ -946,6 +950,39 @@ void MetaMap::generateMetaMap()
 				map->m_category = CATEGORY_INTERFACE;
 				map->m_description = TheGameText->FETCH_OR_SUBSTITUTE("GUI:ToggleHealthBarsDescription", L"Show health bars for selected units only, for damaged units, or always");
 				map->m_displayName = TheGameText->FETCH_OR_SUBSTITUTE("GUI:ToggleHealthBars", L"Toggle Health Bars");
+				break;
+			}
+		}
+	}
+	{
+		// TheSuperHackers @feature Unit stance hotkeys. Default ALT+D/A/S/F, or SHIFT_ALT if that is taken.
+		struct StanceKey { GameMessage::Type type; MappableKeyType key; const char *label; const char *descLabel; const wchar_t *name; const wchar_t *desc; };
+		static const StanceKey stanceKeys[] =
+		{
+			{ GameMessage::MSG_META_STANCE_NORMAL, MK_D, "GUI:StanceNormal", "GUI:StanceNormalDescription", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u043E\u0431\u044B\u0447\u043D\u0430\u044F", L"\u041E\u0431\u044B\u0447\u043D\u0430\u044F \u0441\u0442\u043E\u0439\u043A\u0430: \u043E\u0433\u043E\u043D\u044C \u043F\u043E \u0432\u0440\u0430\u0433\u0430\u043C \u0432 \u0440\u0430\u0434\u0438\u0443\u0441\u0435 \u043E\u0440\u0443\u0436\u0438\u044F \u0438 \u043E\u0442\u0432\u0435\u0442\u043D\u044B\u0439 \u043E\u0433\u043E\u043D\u044C" },
+			{ GameMessage::MSG_META_STANCE_AGGRESSIVE, MK_A, "GUI:StanceAggressive", "GUI:StanceAggressiveDescription", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u043F\u0440\u0435\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C", L"\u0421\u0442\u043E\u0439\u043A\u0430 \u00AB\u041F\u0440\u0435\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C\u00BB: \u0430\u0442\u0430\u043A\u043E\u0432\u0430\u0442\u044C \u0432\u0441\u0435\u0445 \u0432\u0440\u0430\u0433\u043E\u0432 \u0432 \u0437\u043E\u043D\u0435 \u0432\u0438\u0434\u0438\u043C\u043E\u0441\u0442\u0438 \u0438 \u043F\u0440\u0435\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C \u0438\u0445" },
+			{ GameMessage::MSG_META_STANCE_HOLD_POSITION, MK_S, "GUI:StanceHoldPosition", "GUI:StanceHoldPositionDescription", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u0434\u0435\u0440\u0436\u0430\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E", L"\u0421\u0442\u043E\u0439\u043A\u0430 \u00AB\u0414\u0435\u0440\u0436\u0430\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E\u00BB: \u0441\u0442\u0440\u0435\u043B\u044F\u0442\u044C \u0441 \u043C\u0435\u0441\u0442\u0430, \u043D\u0438\u043A\u0443\u0434\u0430 \u043D\u0435 \u0443\u0445\u043E\u0434\u0438\u0442\u044C \u0441\u0430\u043C\u043E\u0441\u0442\u043E\u044F\u0442\u0435\u043B\u044C\u043D\u043E" },
+			{ GameMessage::MSG_META_STANCE_HOLD_FIRE, MK_F, "GUI:StanceHoldFire", "GUI:StanceHoldFireDescription", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u043D\u0435 \u0441\u0442\u0440\u0435\u043B\u044F\u0442\u044C", L"\u0421\u0442\u043E\u0439\u043A\u0430 \u00AB\u041D\u0435 \u0441\u0442\u0440\u0435\u043B\u044F\u0442\u044C\u00BB: \u043E\u0433\u043E\u043D\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E \u043F\u0440\u044F\u043C\u043E\u043C\u0443 \u043F\u0440\u0438\u043A\u0430\u0437\u0443" },
+		};
+		static const MappableKeyModState candidates[] = { ALT, SHIFT_ALT };
+		for (Int s = 0; s < ARRAY_SIZE(stanceKeys); ++s)
+		{
+			MetaMapRec *map = getMetaMapRec(stanceKeys[s].type);
+			if (map->m_key != MK_NONE)
+				continue;
+
+			for (Int i = 0; i < ARRAY_SIZE(candidates); ++i)
+			{
+				if (isKeyComboInUse(stanceKeys[s].key, candidates[i]))
+					continue;
+
+				map->m_key = stanceKeys[s].key;
+				map->m_transition = DOWN;
+				map->m_modState = candidates[i];
+				map->m_usableIn = COMMANDUSABLE_GAME;
+				map->m_category = CATEGORY_CONTROL;
+				map->m_description = TheGameText->FETCH_OR_SUBSTITUTE(stanceKeys[s].descLabel, stanceKeys[s].desc);
+				map->m_displayName = TheGameText->FETCH_OR_SUBSTITUTE(stanceKeys[s].label, stanceKeys[s].name);
 				break;
 			}
 		}

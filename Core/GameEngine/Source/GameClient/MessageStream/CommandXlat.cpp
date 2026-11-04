@@ -70,6 +70,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/UnitStance.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Object.h"
@@ -3506,6 +3507,46 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 				default:
 					TheInGameUI->messageNoFormat( TheGameText->FETCH_OR_SUBSTITUTE("GUI:HealthBarsAlways", L"Health bars: always") );
 					break;
+			}
+			disp = DESTROY_MESSAGE;
+			break;
+		}
+
+		//-----------------------------------------------------------------------------------------
+		case GameMessage::MSG_META_STANCE_NORMAL:
+		case GameMessage::MSG_META_STANCE_AGGRESSIVE:
+		case GameMessage::MSG_META_STANCE_HOLD_POSITION:
+		case GameMessage::MSG_META_STANCE_HOLD_FIRE:
+		{
+			// TheSuperHackers @feature Set the stance of the selected units. Like Stop, it works on the
+			// currently selected group, so it goes through the logic as a network message.
+			if( TheInGameUI->getSelectCount() > 0 )
+			{
+				UnitStance stance = UNIT_STANCE_NORMAL;
+				UnicodeString text;
+				switch( t )
+				{
+					case GameMessage::MSG_META_STANCE_AGGRESSIVE:
+						stance = UNIT_STANCE_AGGRESSIVE;
+						text = TheGameText->FETCH_OR_SUBSTITUTE("GUI:StanceAggressive", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u043F\u0440\u0435\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C");
+						break;
+					case GameMessage::MSG_META_STANCE_HOLD_POSITION:
+						stance = UNIT_STANCE_HOLD_POSITION;
+						text = TheGameText->FETCH_OR_SUBSTITUTE("GUI:StanceHoldPosition", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u0434\u0435\u0440\u0436\u0430\u0442\u044C \u043F\u043E\u0437\u0438\u0446\u0438\u044E");
+						break;
+					case GameMessage::MSG_META_STANCE_HOLD_FIRE:
+						stance = UNIT_STANCE_HOLD_FIRE;
+						text = TheGameText->FETCH_OR_SUBSTITUTE("GUI:StanceHoldFire", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u043D\u0435 \u0441\u0442\u0440\u0435\u043B\u044F\u0442\u044C");
+						break;
+					default:
+						stance = UNIT_STANCE_NORMAL;
+						text = TheGameText->FETCH_OR_SUBSTITUTE("GUI:StanceNormal", L"\u0421\u0442\u043E\u0439\u043A\u0430: \u043E\u0431\u044B\u0447\u043D\u0430\u044F");
+						break;
+				}
+
+				GameMessage *stanceMsg = TheMessageStream->appendMessage( GameMessage::MSG_SET_UNIT_STANCE );
+				stanceMsg->appendIntegerArgument( stance );
+				TheInGameUI->messageNoFormat( text );
 			}
 			disp = DESTROY_MESSAGE;
 			break;

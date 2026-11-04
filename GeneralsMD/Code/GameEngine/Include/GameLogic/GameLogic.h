@@ -312,6 +312,7 @@ private:
 	bool onCreateFormation(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 	bool onClearIngamePopupMessage(GameMessage *msg);
 	bool onDoCheer(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
+	bool onSetUnitStance(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 #if defined(RTS_DEBUG) || defined (_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 	bool onDebugKillSelection(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 	bool onDebugHurtObject(GameMessage *msg);

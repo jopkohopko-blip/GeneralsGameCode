@@ -52,6 +52,7 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/UnitStance.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
@@ -570,6 +571,11 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 		case GameMessage::MSG_DO_CHEER:
 		{
 			onDoCheer(msg, currentlySelectedGroup);
+			break;
+		}
+		case GameMessage::MSG_SET_UNIT_STANCE:
+		{
+			onSetUnitStance(msg, currentlySelectedGroup);
 			break;
 		}
 
@@ -1430,6 +1436,49 @@ bool GameLogic::onDoCheer(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlySe
 	if( currentlySelectedGroup )
 	{
 		currentlySelectedGroup->groupCheer( CMD_FROM_PLAYER );
+	}
+
+	return true;
+}
+
+static void setStanceOfPassenger( Object *passenger, void *userData )
+{
+	const Object *container = passenger->getContainedBy();
+	if( passenger->getAI() && container && passenger->getControllingPlayer() == container->getControllingPlayer() )
+	{
+		passenger->getAI()->setStance( *(const UnitStance *)userData );
+	}
+}
+
+bool GameLogic::onSetUnitStance(GameMessage *msg, AIGroupPtr &currentlySelectedGroup)
+{
+	// TheSuperHackers @feature Set the stance of all selected units that have an AI.
+	if( currentlySelectedGroup == nullptr || msg->getArgumentCount() < 1 )
+		return true;
+
+	const Int stanceValue = msg->getArgument( 0 )->integer;
+	if( stanceValue < 0 || stanceValue >= UNIT_STANCE_COUNT )
+		return true;
+
+	const VecObjectID& selectedObjects = currentlySelectedGroup->getAllIDs();
+	for (VecObjectID::const_iterator it = selectedObjects.begin(); it != selectedObjects.end(); ++it)
+	{
+		Object *obj = findObjectByID(*it);
+		if( obj == nullptr )
+			continue;
+
+		UnitStance stance = (UnitStance)stanceValue;
+		if( obj->getAI() )
+		{
+			obj->getAI()->setStance( stance );
+		}
+
+		// Garrisons, bunkers and transports pass the stance on to the units inside, so that
+		// e.g. a garrison can hold fire for an ambush.
+		if( obj->getContain() )
+		{
+			obj->getContain()->iterateContained( setStanceOfPassenger, &stance, FALSE );
+		}
 	}
 
 	return true;
