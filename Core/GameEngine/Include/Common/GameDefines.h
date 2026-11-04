@@ -131,13 +131,9 @@
 
 // This is here to easily toggle between the retail compatible with fixed pathfinding fallback and pure fixed pathfinding mode
 #ifndef RETAIL_COMPATIBLE_PATHFINDING
-// TheSuperHackers @tweak This build has no retail multiplayer, so Zero Hour always uses the crash fixed pathfinding.
-// Generals keeps the retail mode because its retail CRC fence code does not build without it.
-#if RTS_ZEROHOUR
-#define RETAIL_COMPATIBLE_PATHFINDING (0)
-#else
+// TheSuperHackers @info The retail mode already switches to the crash fixed pathfinding by itself when it hits
+// the retail failure case, so both games keep it. Forcing (0) for Zero Hour was suspected of order delays.
 #define RETAIL_COMPATIBLE_PATHFINDING (1)
-#endif
 #endif
 
 // This is here to easily toggle between the retail compatible pathfinding memory allocation and the new static allocated data mode

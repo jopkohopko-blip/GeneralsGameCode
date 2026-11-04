@@ -1632,6 +1632,11 @@ Bool AIInternalMoveToState::getAdjustsDestination() const
  * each other at the destination never trigger that and can stand still forever.
  * Every STUCK_CHECK_FRAMES check that we actually moved. If we didn't, get a fresh path, and if
  * that didn't help either, briefly drive through friendly units so the crowd can untangle.
+ *
+ * Only the human player's units are watched, and at most MAX_STUCK_REPATHS times per stuck spell:
+ * every repath goes through the shared pathfind queue, and repathing whole computer armies every
+ * few seconds filled that queue so the player's own move orders waited seconds for their path.
+ * Computer units have their own anti stuck code in AIPlayer.
  * Returns true if a new path should be computed.
  */
 Bool AIInternalMoveToState::checkStuck()
@@ -1639,8 +1644,10 @@ Bool AIInternalMoveToState::checkStuck()
 	Object *obj = getMachineOwner();
 	AIUpdateInterface *ai = obj->getAI();
 	const UnsignedInt now = TheGameLogic->getFrame();
+	const Player *owner = obj->getControllingPlayer();
 
-	if (!TheGlobalData->m_smartPathing || m_waitingForPath || ai->isWaitingForPath() || ai->getPath() == nullptr ||
+	if (!TheGlobalData->m_smartPathing || owner == nullptr || owner->getPlayerType() != PLAYER_HUMAN ||
+		m_waitingForPath || ai->isWaitingForPath() || ai->getPath() == nullptr ||
 		!ai->isDoingGroundMovement() || ai->getCurLocomotor() == nullptr || obj->isDisabled() ||
 		obj->testStatus(OBJECT_STATUS_IMMOBILE) || obj->testStatus(OBJECT_STATUS_IS_USING_ABILITY) ||
 		obj->isKindOf(KINDOF_PROJECTILE))
@@ -1652,7 +1659,7 @@ Bool AIInternalMoveToState::checkStuck()
 		return false;
 	}
 
-	const UnsignedInt STUCK_CHECK_FRAMES = 2*LOGICFRAMES_PER_SECOND;
+	const UnsignedInt STUCK_CHECK_FRAMES = 3*LOGICFRAMES_PER_SECOND;
 	if (m_progressFrame == 0 || now < m_progressFrame)
 	{
 		m_progressPosition = *obj->getPosition();
@@ -1667,7 +1674,7 @@ Bool AIInternalMoveToState::checkStuck()
 	m_progressPosition = *obj->getPosition();
 	m_progressFrame = now;
 
-	// Even the slowest ground units cover several cells in 2 seconds.
+	// Even the slowest ground units cover several cells in 3 seconds, including a turn on the spot.
 	const Real MIN_PROGRESS = 0.75f*PATHFIND_CELL_SIZE_F;
 	if (dx*dx + dy*dy >= MIN_PROGRESS*MIN_PROGRESS)
 	{
@@ -1677,6 +1684,12 @@ Bool AIInternalMoveToState::checkStuck()
 
 	// Close enough to the end of the path: the normal arrival code handles it.
 	if (ai->getLocomotorDistanceToGoal() < ai->getCurLocomotor()->getCloseEnoughDist())
+		return false;
+
+	// Gave it a fresh path and a collision free moment already. Repathing again and again
+	// won't help and only costs pathfind time; the retail blocked logic takes it from here.
+	const Int MAX_STUCK_REPATHS = 2;
+	if (m_stuckCount >= MAX_STUCK_REPATHS)
 		return false;
 
 	++m_stuckCount;
