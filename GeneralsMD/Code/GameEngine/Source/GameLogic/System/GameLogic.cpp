@@ -2347,6 +2347,12 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 
 	if(loadingSaveGame == FALSE && TheTransitionHandler != nullptr && m_loadScreen)
 	{
+		// Fork @performance The load screen fade out took a fixed second (30 frames at the base rate)
+		// on every map load. It now plays 4x faster, about a quarter of a second.
+		const Real LoadScreenFadeSpeedup = 4.0f;
+		const Real oldTransitionSpeed = TheGlobalData->m_gameWindowTransitionSpeedMultiplier;
+		TheWritableGlobalData->m_gameWindowTransitionSpeedMultiplier = oldTransitionSpeed * LoadScreenFadeSpeedup;
+
 		TheFramePacer->reset();
 		TheTransitionHandler->setGroup("FadeWholeScreen");
 		while(!TheTransitionHandler->isFinished())
@@ -2360,6 +2366,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 			}
 
 		}
+
+		TheWritableGlobalData->m_gameWindowTransitionSpeedMultiplier = oldTransitionSpeed;
 	}
 
 	if(m_loadScreen)
