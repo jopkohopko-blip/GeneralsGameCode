@@ -205,6 +205,7 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/KeyDefs.h
     Include/GameClient/LanguageFilter.h
     Include/GameClient/Line2D.h
+    Include/GameClient/LineFormationPreview.h
     Include/GameClient/LoadScreen.h
     Include/GameClient/LookAtXlat.h
     Include/GameClient/MapUtil.h
@@ -258,6 +259,7 @@ set(GAMEENGINE_SRC
 #    Include/GameLogic/FPUControl.h
 #    Include/GameLogic/GameLogic.h
     Include/GameLogic/GameMode.h
+    Include/GameLogic/LineFormation.h
 #    Include/GameLogic/GhostObject.h
 #    Include/GameLogic/Locomotor.h
 #    Include/GameLogic/LocomotorSet.h
@@ -832,6 +834,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/Intro.cpp
     Source/GameClient/LanguageFilter.cpp
     Source/GameClient/Line2D.cpp
+    Source/GameClient/LineFormationPreview.cpp
     Source/GameClient/MapUtil.cpp
     Source/GameClient/MessageStream/CommandXlat.cpp
     Source/GameClient/MessageStream/GUICommandTranslator.cpp
@@ -867,6 +870,7 @@ set(GAMEENGINE_SRC
 #    Source/GameLogic/AI/AIGuard.cpp
 #    Source/GameLogic/AI/AIGuardRetaliate.cpp
     Source/GameLogic/AI/AIPathfind.cpp
+    Source/GameLogic/AI/LineFormation.cpp
 #    Source/GameLogic/AI/AIPlayer.cpp
 #    Source/GameLogic/AI/AISkirmishPlayer.cpp
 #    Source/GameLogic/AI/AIStates.cpp

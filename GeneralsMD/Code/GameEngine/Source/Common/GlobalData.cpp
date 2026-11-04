@@ -1066,6 +1066,9 @@ GlobalData::GlobalData()
 	m_useRightMouseScrollWithAlternateMouse = FALSE;
 	m_clientRetaliationModeEnabled = TRUE; //On by default.
 	m_doubleClickAttackMove = FALSE;
+	m_formationDrag = TRUE;
+	m_formationSmartRoles = TRUE;
+	m_formationMoveTogether = TRUE;
 
 }
 
@@ -1209,6 +1212,9 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_useRightMouseScrollWithAlternateMouse = optionPref.getRightMouseScrollWithAlternateMouseEnabled();
 	TheWritableGlobalData->m_clientRetaliationModeEnabled = optionPref.getRetaliationModeEnabled();
 	TheWritableGlobalData->m_doubleClickAttackMove = optionPref.getDoubleClickAttackMoveEnabled();
+	TheWritableGlobalData->m_formationDrag = optionPref.getFormationDragEnabled();
+	TheWritableGlobalData->m_formationSmartRoles = optionPref.getFormationSmartRolesEnabled();
+	TheWritableGlobalData->m_formationMoveTogether = optionPref.getFormationMoveTogetherEnabled();
 	TheWritableGlobalData->m_jpegQuality = optionPref.getJpegQuality();
 	TheWritableGlobalData->m_keyboardScrollFactor = optionPref.getScrollFactor();
 	TheWritableGlobalData->m_drawScrollAnchor = optionPref.getDrawScrollAnchor();

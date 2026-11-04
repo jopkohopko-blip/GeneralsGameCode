@@ -1402,6 +1402,25 @@ StateReturnType AIIdleState::update()
 
 	doInitIdleState();
 
+	// TheSuperHackers @feature A formation move has ended: drop the group speed cap and turn to the
+	// direction the player dragged.
+	{
+		AIUpdateInterface *ai = getMachineOwner()->getAI();
+		// Only for the unit's main AI state machine, not for idle states nested in other machines.
+		if (ai && ai->isIdle())
+		{
+			ai->setGroupSpeedLimit( FAST_AS_POSSIBLE );
+
+			Coord3D facePos;
+			CommandSourceType faceSource;
+			if (ai->consumePendingFormationFacing( &facePos, &faceSource ) && !getMachine()->isLocked())
+			{
+				ai->aiFacePosition( &facePos, faceSource );
+				return STATE_CONTINUE;
+			}
+		}
+	}
+
 	UnsignedInt timeToSleep = IDLE_COUNTDOWN_DELAY + m_initialSleepOffset;
 	UnsignedInt oldSleepOffset = m_initialSleepOffset;
 	m_initialSleepOffset = 0;

@@ -273,6 +273,42 @@ Bool OptionPreferences::getDoubleClickAttackMoveEnabled()
 	return FALSE;
 }
 
+Bool OptionPreferences::getFormationDragEnabled() const
+{
+	OptionPreferences::const_iterator it = find("FormationDrag");
+	if( it == end() )
+		return TheGlobalData->m_formationDrag;
+
+	if( stricmp( it->second.str(), "yes" ) == 0 )
+		return TRUE;
+
+	return FALSE;
+}
+
+Bool OptionPreferences::getFormationSmartRolesEnabled() const
+{
+	OptionPreferences::const_iterator it = find("FormationSmartRoles");
+	if( it == end() )
+		return TheGlobalData->m_formationSmartRoles;
+
+	if( stricmp( it->second.str(), "yes" ) == 0 )
+		return TRUE;
+
+	return FALSE;
+}
+
+Bool OptionPreferences::getFormationMoveTogetherEnabled() const
+{
+	OptionPreferences::const_iterator it = find("FormationMoveTogether");
+	if( it == end() )
+		return TheGlobalData->m_formationMoveTogether;
+
+	if( stricmp( it->second.str(), "yes" ) == 0 )
+		return TRUE;
+
+	return FALSE;
+}
+
 Int OptionPreferences::getJpegQuality() const
 {
 	OptionPreferences::const_iterator it = find("JpegQuality");

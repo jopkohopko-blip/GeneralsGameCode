@@ -56,6 +56,19 @@ private:
 	UnsignedInt m_rightMouseDownTimeMs;	// when the mouse down happened
 	UnsignedInt m_rightMouseUpTimeMs;		// when the mouse up happened
 
+	// TheSuperHackers @feature Line formation: drag with the order mouse button to line units up.
+	Bool m_formationDragArmed;							// order button went down on the ground with units selected
+	Bool m_formationDragActive;							// the mouse moved far enough: this is a formation drag
+	ICoord2D m_formationDragAnchor;
+	Coord3D m_formationDragStart;
+	Coord3D m_formationDragEnd;
+	UnsignedInt m_formationDragIssuedUpTimeMs;	// button up time of the last formation order, so its click is not also a move
+
+	void armFormationDrag( const ICoord2D &pixel );
+	void updateFormationDrag( const ICoord2D &pixel );
+	Bool finishFormationDrag( const ICoord2D &pixel, UnsignedInt upTimeMs );
+	void cancelFormationDrag();
+
 	GameMessage::Type createMoveToLocationMessage( Drawable *draw, const Coord3D *dest, CommandEvaluateType commandType );
 	GameMessage::Type createAttackMessage( Drawable *draw, Drawable *other, CommandEvaluateType commandType );
 	GameMessage::Type createEnterMessage( Drawable *enter, CommandEvaluateType commandType );

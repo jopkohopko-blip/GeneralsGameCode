@@ -568,6 +568,14 @@ static void saveOptions()
 	TheWritableGlobalData->m_useAlternateMouse = GadgetCheckBoxIsChecked(checkAlternateMouse);
 	(*pref)["RightClickOrders"] = TheWritableGlobalData->m_useAlternateMouse ? "yes" : "no";
 
+	// TheSuperHackers @feature Formation settings have no menu controls yet; write them so they show up in Options.ini.
+	TheWritableGlobalData->m_formationDrag = pref->getFormationDragEnabled();
+	TheWritableGlobalData->m_formationSmartRoles = pref->getFormationSmartRolesEnabled();
+	TheWritableGlobalData->m_formationMoveTogether = pref->getFormationMoveTogetherEnabled();
+	(*pref)["FormationDrag"] = TheGlobalData->m_formationDrag ? "yes" : "no";
+	(*pref)["FormationSmartRoles"] = TheGlobalData->m_formationSmartRoles ? "yes" : "no";
+	(*pref)["FormationMoveTogether"] = TheGlobalData->m_formationMoveTogether ? "yes" : "no";
+
 	// TheSuperHackers @todo Add check box ?
 	{
 		Bool useRightMouseScrollWithAlternateMouse = pref->getRightMouseScrollWithAlternateMouseEnabled();

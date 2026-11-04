@@ -413,7 +413,9 @@ Bool AIGroup::getMinMaxAndCenter( Coord2D *min, Coord2D *max, Coord3D *center )
 			if (count==0) {
 				id = curID;
 			} else {
-				if (id == NO_FORMATION_ID) {
+				// TheSuperHackers @bugfix The group only moves as a formation when all members share
+				// the same formation. Previously only the first member was checked.
+				if (curID != id) {
 					id = NO_FORMATION_ID;
 				}
 			}

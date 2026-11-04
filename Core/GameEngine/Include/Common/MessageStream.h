@@ -612,6 +612,7 @@ public:
 		MSG_SET_MINE_CLEARING_DETAIL,								///< Order selected unit(s) to clear mines
 		MSG_ENABLE_RETALIATION_MODE,								///< Turn retaliation mode on or off.
 		MSG_SET_UNIT_STANCE,												///< TheSuperHackers @feature (Int stance) Set the stance of the currently selected group
+		MSG_DO_FORMATION_MOVETO,										///< TheSuperHackers @feature (location start, location end, int flags) Line the selection up along a dragged line.
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 

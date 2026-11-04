@@ -157,6 +157,9 @@ public:
 	Bool m_useRightMouseScrollWithAlternateMouse; // TheSuperHackers @feature User option for RMB scroll in Alternate Mouse mode.
 	Bool m_clientRetaliationModeEnabled;
 	Bool m_doubleClickAttackMove;
+	Bool m_formationDrag;					///< TheSuperHackers @feature Drag with the order mouse button to line units up along the dragged line.
+	Bool m_formationSmartRoles;		///< TheSuperHackers @feature Formations put tanks in front, anti-air in the middle, infantry and artillery behind.
+	Bool m_formationMoveTogether;	///< TheSuperHackers @feature Groups move at the speed of their slowest member.
 	Bool m_rightMouseAlwaysScrolls;
 	Int m_jpegQuality; // TheSuperHackers @feature Quality for JPEG screenshots.
 	Bool m_useWaterPlane;

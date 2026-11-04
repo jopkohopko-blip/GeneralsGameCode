@@ -416,6 +416,13 @@ public:
 	Real getDesiredSpeed() const { return m_desiredSpeed; }
 	void setDesiredSpeed( Real speed ) { m_desiredSpeed = speed; }	///< how fast we want to go
 
+	// TheSuperHackers @feature Formation moves: keep a group together and turn to face a direction on arrival.
+	void setGroupSpeedLimit( Real speed ) { m_groupSpeedLimit = speed; }	///< cap on the locomotor speed while moving with a group
+	Real getGroupSpeedLimit() const { return m_groupSpeedLimit; }
+	void setPendingFormationFacing( const Coord3D *pos, CommandSourceType cmdSource );	///< face this position once the current move ends
+	Bool consumePendingFormationFacing( Coord3D *pos, CommandSourceType *cmdSource );	///< returns and clears the pending facing, if any
+	void clearFormationMoveState();	///< drop the group speed cap and the pending facing
+
 	// these are virtual because subclasses might need to override them. (srj)
 	virtual void setLocomotorGoalPositionOnPath();
 	virtual void setLocomotorGoalPositionExplicit(const Coord3D& newPos);
@@ -702,6 +709,10 @@ private:
 	UnsignedInt					m_nextEnemyScanTime;				///< how long until the next enemy scan
 	ObjectID						m_currentVictimID;					///< if not INVALID_ID, this agent's current victim.
 	Real								m_desiredSpeed;							///< the desired speed of the tank
+	Real								m_groupSpeedLimit;					///< speed cap so a group moves at its slowest member's speed (not saved)
+	Coord3D							m_pendingFormationFacing;		///< position to face when the move ends (not saved)
+	CommandSourceType		m_pendingFormationFacingSource;
+	Bool								m_hasPendingFormationFacing;
 	CommandSourceType		m_lastCommandSource;			/**< Keep track of the source of the last command we got.
 																									This is set immediately before the SetState that goes
 																									to the state machine, so onEnter in there can know where

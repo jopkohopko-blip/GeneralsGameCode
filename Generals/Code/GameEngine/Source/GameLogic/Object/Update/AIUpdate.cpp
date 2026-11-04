@@ -209,6 +209,10 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_nextEnemyScanTime = 0;
 	m_currentVictimID = INVALID_ID;
 	m_desiredSpeed = FAST_AS_POSSIBLE;
+	m_groupSpeedLimit = FAST_AS_POSSIBLE;
+	m_pendingFormationFacing.zero();
+	m_pendingFormationFacingSource = CMD_FROM_AI;
+	m_hasPendingFormationFacing = FALSE;
 	m_lastCommandSource = CMD_FROM_AI;
 	m_guardMode = GUARDMODE_NORMAL;
 	m_guardTargetType[0] = m_guardTargetType[1] = GUARDTARGET_NONE;
@@ -2129,6 +2133,8 @@ UpdateSleepTime AIUpdateInterface::doLocomotor()
 						Real myMaxSpeed = m_curLocomotor->getMaxSpeedForCondition(getObject()->getBodyModule()->getDamageState());
 						if( speed == FAST_AS_POSSIBLE || speed > myMaxSpeed )
 							speed = myMaxSpeed;
+						if( speed > m_groupSpeedLimit )
+							speed = m_groupSpeedLimit;
 						m_curLocomotor->locoUpdate_moveTowardsPosition(getObject(),
 							m_locomotorGoalData, 0.0f, speed, &blocked);
 						m_doFinalPosition = FALSE;
@@ -2176,6 +2182,8 @@ UpdateSleepTime AIUpdateInterface::doLocomotor()
 						Real myMaxSpeed = m_curLocomotor->getMaxSpeedForCondition(getObject()->getBodyModule()->getDamageState());
 						if( speed == FAST_AS_POSSIBLE || speed > myMaxSpeed )
 							speed = myMaxSpeed;
+						if( speed > m_groupSpeedLimit )
+							speed = m_groupSpeedLimit;
 
 						if (blocked && speed>m_curMaxBlockedSpeed)
 						{
@@ -2563,6 +2571,34 @@ Bool AIUpdateInterface::isAllowedToRespondToAiCommands(const AICommandParms* par
 }
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+void AIUpdateInterface::setPendingFormationFacing( const Coord3D *pos, CommandSourceType cmdSource )
+{
+	m_pendingFormationFacing = *pos;
+	m_pendingFormationFacingSource = cmdSource;
+	m_hasPendingFormationFacing = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AIUpdateInterface::consumePendingFormationFacing( Coord3D *pos, CommandSourceType *cmdSource )
+{
+	if (!m_hasPendingFormationFacing)
+		return FALSE;
+
+	*pos = m_pendingFormationFacing;
+	*cmdSource = m_pendingFormationFacingSource;
+	m_hasPendingFormationFacing = FALSE;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void AIUpdateInterface::clearFormationMoveState()
+{
+	m_groupSpeedLimit = FAST_AS_POSSIBLE;
+	m_hasPendingFormationFacing = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 {
 	// TheSuperHackers @info The AiCommandParms for m_obj, m_otherObj and m_team should be null tested before use.
@@ -2570,6 +2606,9 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
+
+	// TheSuperHackers @feature Any new order ends a formation move.
+	clearFormationMoveState();
 
 #ifdef ALLOW_SURRENDER
 	// surrendered items have very limited options, and only via AI cmds
