@@ -572,7 +572,7 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 				const Coord3D end = msg->getArgument( 1 )->location;
 				const Int flags = msg->getArgument( 2 )->integer;
 				currentlySelectedGroup->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
-				LineFormation::groupMoveToLine( currentlySelectedGroup, start, end, flags, CMD_FROM_PLAYER );
+				LineFormation::groupMoveToLine( &*currentlySelectedGroup, start, end, flags, CMD_FROM_PLAYER );
 			}
 			break;
 		}
@@ -1355,7 +1355,7 @@ bool GameLogic::onDoMoveto(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlyS
 
 		// TheSuperHackers @feature The player asked the group to keep together: move at the slowest member's speed.
 		if (msg->getArgumentCount() >= 2 && msg->getArgument( 1 )->boolean)
-			LineFormation::applyGroupSpeedLimit( currentlySelectedGroup );
+			LineFormation::applyGroupSpeedLimit( &*currentlySelectedGroup );
 	}
 
 	return true;
