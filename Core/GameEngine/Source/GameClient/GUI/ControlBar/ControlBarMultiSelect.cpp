@@ -31,13 +31,18 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/MessageStream.h"
+#include "Common/NameKeyGenerator.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/Gadget.h"
 #include "GameClient/GameWindow.h"
+#include "GameClient/GameWindowManager.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Keyboard.h"
 #include "GameLogic/Object.h"
 
 
@@ -424,4 +429,210 @@ void ControlBar::updateContextMultiSelect()
 	//showCommandMarkers();
 
 
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Forget which unit types the build queue buttons represent */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::clearMultiSelectTypes()
+{
+	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; ++i )
+	{
+		m_multiSelectTypeButtons[ i ] = nullptr;
+		m_multiSelectTypes[ i ] = nullptr;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature When several different unit types are selected, reuse the build queue
+	* buttons to show one button per type with the number of selected units of that type. The most
+	* numerous types come first. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::populateMultiSelectTypes()
+{
+	struct TypeCount
+	{
+		const ThingTemplate *thing;
+		Int count;
+	};
+
+	clearMultiSelectTypes();
+
+	GameWindow *queueParent = m_contextParent[ CP_BUILD_QUEUE ];
+	if( queueParent == nullptr )
+		return;
+
+	// count the selected objects per type, keeping the order in which the types first appear
+	std::vector<TypeCount> types;
+	const DrawableList *selectedDrawables = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selectedDrawables->begin(); it != selectedDrawables->end(); ++it )
+	{
+		const Drawable *draw = *it;
+		const Object *obj = draw ? draw->getObject() : nullptr;
+		if( obj == nullptr || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) ||
+				obj->getStatusBits().test( OBJECT_STATUS_SOLD ) || !obj->isLocallyControlled() )
+			continue;
+
+		// Use the Object's thing template, doing so will prevent weirdness for disguised vehicles.
+		const ThingTemplate *thing = obj->getTemplate();
+		size_t i = 0;
+		for( ; i < types.size(); ++i )
+		{
+			if( types[ i ].thing == thing )
+			{
+				++types[ i ].count;
+				break;
+			}
+		}
+		if( i == types.size() )
+		{
+			TypeCount entry;
+			entry.thing = thing;
+			entry.count = 1;
+			types.push_back( entry );
+		}
+	}
+
+	// a selection of a single type already shows its portrait, nothing to choose from here
+	if( types.size() < 2 )
+	{
+		queueParent->winHide( TRUE );
+		return;
+	}
+
+	// bubble the most numerous types to the front, stable for equal counts
+	for( size_t i = 1; i < types.size(); ++i )
+	{
+		for( size_t j = i; j > 0 && types[ j ].count > types[ j - 1 ].count; --j )
+		{
+			TypeCount tmp = types[ j ];
+			types[ j ] = types[ j - 1 ];
+			types[ j - 1 ] = tmp;
+		}
+	}
+
+	static NameKeyType buildQueueIDs[ MAX_BUILD_QUEUE_BUTTONS ];
+	static Bool idsInitialized = FALSE;
+	if( idsInitialized == FALSE )
+	{
+		AsciiString buttonName;
+		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; ++i )
+		{
+			buttonName.format( "ControlBar.wnd:ButtonQueue%02d", i + 1 );
+			buildQueueIDs[ i ] = TheNameKeyGenerator->nameToKey( buttonName );
+		}
+		idsInitialized = TRUE;
+	}
+
+	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; ++i )
+	{
+		GameWindow *button = TheWindowManager->winGetWindowFromId( queueParent, buildQueueIDs[ i ] );
+		if( button == nullptr )
+			continue;
+
+		// the button must not look like a cancel production command anymore
+		GadgetButtonSetData( button, nullptr );
+		GadgetButtonDrawOverlayImage( button, nullptr );
+
+		if( i < (Int)types.size() )
+		{
+			const ThingTemplate *thing = types[ i ].thing;
+			const Image *image = thing->getButtonImage();
+			if( image == nullptr )
+				image = thing->getSelectedPortraitImage();
+
+			m_multiSelectTypeButtons[ i ] = button;
+			m_multiSelectTypes[ i ] = thing;
+
+			button->winEnable( TRUE );
+			button->winSetStatus( WIN_STATUS_USE_OVERLAY_STATES | WIN_STATUS_RIGHT_CLICK );
+			GadgetButtonSetEnabledImage( button, image );
+
+			UnicodeString text;
+			if( types[ i ].count > 1 )
+				text.format( L"%d", types[ i ].count );
+			GadgetButtonSetText( button, text );
+		}
+		else
+		{
+			button->winEnable( FALSE );
+			button->winClearStatus( WIN_STATUS_USE_OVERLAY_STATES | WIN_STATUS_RIGHT_CLICK );
+			GadgetButtonSetText( button, L"" );
+		}
+	}
+
+	queueParent->winHide( FALSE );
+
+	// the type buttons take the place of the portrait
+	setPortraitByObject( nullptr );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature A click on a unit type button of a mixed selection keeps only the
+	* units of that type selected. Ctrl or Shift click, or a right click, removes that type from
+	* the selection instead. Returns TRUE when the button was one of the type buttons. */
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::processMultiSelectTypeClick( GameWindow *button, GadgetGameMessage gadgetMessage )
+{
+	if( m_currContext != CB_CONTEXT_MULTI_SELECT || button == nullptr )
+		return FALSE;
+
+	const ThingTemplate *thing = nullptr;
+	for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; ++i )
+	{
+		if( m_multiSelectTypeButtons[ i ] == button )
+		{
+			thing = m_multiSelectTypes[ i ];
+			break;
+		}
+	}
+	if( thing == nullptr )
+		return FALSE;
+
+	const Bool removeType = gadgetMessage == GBM_SELECTED_RIGHT ||
+		( TheKeyboard && ( TheKeyboard->isCtrl() || TheKeyboard->isShift() ) );
+
+	// copy the selection, it changes while we (de)select
+	DrawableList selection = *TheInGameUI->getAllSelectedDrawables();
+
+	if( removeType )
+	{
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_REMOVE_FROM_SELECTED_GROUP );
+		for( DrawableListIt it = selection.begin(); it != selection.end(); ++it )
+		{
+			Drawable *draw = *it;
+			Object *obj = draw ? draw->getObject() : nullptr;
+			if( obj && obj->getTemplate() == thing )
+			{
+				msg->appendObjectIDArgument( obj->getID() );
+				TheInGameUI->deselectDrawable( draw );
+			}
+		}
+	}
+	else
+	{
+		DrawableList keep;
+		for( DrawableListIt it = selection.begin(); it != selection.end(); ++it )
+		{
+			Drawable *draw = *it;
+			Object *obj = draw ? draw->getObject() : nullptr;
+			if( obj && obj->getTemplate() == thing && obj->isLocallyControlled() )
+				keep.push_back( draw );
+		}
+		if( keep.empty() )
+			return TRUE;
+
+		TheInGameUI->deselectAllDrawables();
+
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP );
+		msg->appendBooleanArgument( TRUE );
+		for( DrawableListIt it = keep.begin(); it != keep.end(); ++it )
+		{
+			Drawable *draw = *it;
+			msg->appendObjectIDArgument( draw->getObject()->getID() );
+			TheInGameUI->selectDrawable( draw );
+		}
+	}
+
+	return TRUE;
 }

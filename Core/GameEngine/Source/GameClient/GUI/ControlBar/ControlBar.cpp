@@ -951,6 +951,7 @@ ControlBar::ControlBar()
 	m_displayedQueueCount = 0;
 	resetBuildQueueData();
 	resetContainData();
+	clearMultiSelectTypes();
 	m_lastRecordedInventoryCount = 0;
 
 	m_videoManager = nullptr;
@@ -1312,6 +1313,7 @@ void ControlBar::reset()
 	hideSpecialPowerShortcut();
 	// do not destroy the rally drawable, it will get destroyed with everything else during a reset
 	m_rallyPointDrawableID = INVALID_DRAWABLE_ID;
+	clearMultiSelectTypes();
 	if(m_radarAttackGlowWindow)
 		m_radarAttackGlowWindow->winEnable(TRUE);
 	m_radarAttackGlowOn = FALSE;
@@ -2128,6 +2130,10 @@ CBCommandStatus ControlBar::processContextSensitiveButtonClick( GameWindow *butt
 																																GadgetGameMessage gadgetMessage )
 {
 
+	// TheSuperHackers @feature Clicks on the unit type buttons of a mixed selection
+	if( processMultiSelectTypeClick( button, gadgetMessage ) )
+		return CBC_COMMAND_USED;
+
 	// call command processing method
 	return processCommandUI( button, gadgetMessage );
 
@@ -2169,6 +2175,9 @@ void ControlBar::switchToContext( ControlBarContext context, Drawable *draw )
 
 	// save a pointer for the currently selected drawable
 	m_currentSelectedDrawable = draw;
+
+	// the build queue buttons only represent selected unit types while in the multi select context
+	clearMultiSelectTypes();
 
 	if (IsInGameChatActive() == FALSE && TheGameLogic && !TheGameLogic->isInShellGame()) {
 		TheWindowManager->winSetFocus( nullptr );
@@ -2374,6 +2383,9 @@ void ControlBar::switchToContext( ControlBarContext context, Drawable *draw )
 
 			// fill the specific UI info
 			populateMultiSelect();
+
+			// TheSuperHackers @feature Show the unit types of a mixed selection in the build queue slots
+			populateMultiSelectTypes();
 
 			break;
 
