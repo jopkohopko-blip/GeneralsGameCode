@@ -844,6 +844,9 @@ protected:
 	void populatePurchaseScience(Player* player);
 	void populateCommand( Object *obj );
 	void populateMultiSelect();
+	void populateMultiSelectTypes();	///< TheSuperHackers @feature Show one button per unit type of a mixed selection
+	void clearMultiSelectTypes();
+	Bool processMultiSelectTypeClick( GameWindow *button, GadgetGameMessage gadgetMessage );
 	void populateBuildQueue( Object *producer );
 	void populateStructureInventory( Object *building );
 	void populateBeacon( Object *beacon );
@@ -963,6 +966,11 @@ protected:
 
 	};
 	QueueEntry m_queueData[ MAX_BUILD_QUEUE_BUTTONS ];	///< what the build queue represents
+
+	// TheSuperHackers @feature In a mixed multi selection the build queue buttons show the unit types
+	// that are selected. Clicking one narrows the selection to that type, Ctrl/Shift/right click removes it.
+	GameWindow *m_multiSelectTypeButtons[ MAX_BUILD_QUEUE_BUTTONS ];
+	const ThingTemplate *m_multiSelectTypes[ MAX_BUILD_QUEUE_BUTTONS ];
 
 	//cameo flash
 	Bool m_flash;                                       ///< tells update whether or not to check for flash
