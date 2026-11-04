@@ -1074,6 +1074,7 @@ GlobalData::GlobalData()
 	m_formationDrag = TRUE;
 	m_formationSmartRoles = TRUE;
 	m_formationMoveTogether = TRUE;
+	m_smartPathing = TRUE;
 
 }
 
@@ -1221,6 +1222,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_formationDrag = optionPref.getFormationDragEnabled();
 	TheWritableGlobalData->m_formationSmartRoles = optionPref.getFormationSmartRolesEnabled();
 	TheWritableGlobalData->m_formationMoveTogether = optionPref.getFormationMoveTogetherEnabled();
+	TheWritableGlobalData->m_smartPathing = optionPref.getSmartPathingEnabled();
 	TheWritableGlobalData->m_jpegQuality = optionPref.getJpegQuality();
 	TheWritableGlobalData->m_keyboardScrollFactor = optionPref.getScrollFactor();
 	TheWritableGlobalData->m_drawScrollAnchor = optionPref.getDrawScrollAnchor();

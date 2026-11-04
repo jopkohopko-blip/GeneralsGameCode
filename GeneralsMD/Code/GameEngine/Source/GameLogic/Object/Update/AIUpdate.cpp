@@ -1497,6 +1497,38 @@ Real AIUpdateInterface::calculateMaxBlockedSpeed(Object *other) const
 
 
 //-------------------------------------------------------------------------------------------------
+/* TheSuperHackers @tweak Returns TRUE if the other unit is making progress away from us, so that being
+behind it means waiting in a moving column rather than being stuck. */
+Bool AIUpdateInterface::isFollowingMovingUnit(Object *other) const
+{
+	const AIUpdateInterface *aiOther = other->getAI();
+	if (aiOther == nullptr || m_curLocomotor == nullptr)
+		return FALSE;
+
+	// If the unit in front is itself stuck, the column is not moving.
+	if (aiOther->getNumFramesBlocked() > LOGICFRAMES_PER_SECOND)
+		return FALSE;
+
+	const PhysicsBehavior *otherPhysics = other->getPhysics();
+	if (otherPhysics == nullptr)
+		return FALSE;
+
+	Coord2D vectorToOther;
+	vectorToOther.x = other->getPosition()->x - getObject()->getPosition()->x;
+	vectorToOther.y = other->getPosition()->y - getObject()->getPosition()->y;
+	if (vectorToOther.x == 0.0f && vectorToOther.y == 0.0f)
+		return FALSE;
+	vectorToOther.normalize();
+
+	const Coord3D *otherVel = otherPhysics->getVelocity();
+	const Real awaySpeed = otherVel->x*vectorToOther.x + otherVel->y*vectorToOther.y;
+
+	const Real myMaxSpeed = m_curLocomotor->getMaxSpeedForCondition(getObject()->getBodyModule()->getDamageState());
+	const Real MIN_COLUMN_SPEED_FACTOR = 0.2f;
+	return awaySpeed > myMaxSpeed * MIN_COLUMN_SPEED_FACTOR;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool AIUpdateInterface::blockedBy(Object *other)
 /* Returns TRUE if we are blocked from moving by the other object.*/
 {
@@ -1534,6 +1566,12 @@ Bool AIUpdateInterface::blockedBy(Object *other)
 	Real curDSqr = dx*dx+dy*dy;
 
 	if (obj->isKindOf(KINDOF_INFANTRY) && other->isKindOf(KINDOF_INFANTRY)) {
+		// TheSuperHackers @tweak Smart pathing: moving infantry squeezes past other moving infantry instead of
+		// queuing up behind it, so squads don't jam in narrow places such as bridges and gaps between buildings.
+		// Standing infantry still blocks, so units don't pile up on the same spot at the destination.
+		if (TheGlobalData->m_smartPathing && otherMoving) {
+			return FALSE;
+		}
 		// Infantry doesn't tend to impede other infantry...
 #ifdef INFANTRY_MOVES_THROUGH_INFANTRY
 		if (!otherMoving) {
@@ -1708,6 +1746,16 @@ Bool AIUpdateInterface::processCollision(PhysicsBehavior *physics, Object *other
 					}
 				}
 #endif
+			}
+
+			// TheSuperHackers @tweak Smart pathing: if the unit in front of us is driving away along its path, we are
+			// just in a column (crossing a bridge, passing between buildings). Follow it at its speed and don't count
+			// this as being blocked; otherwise everybody in the column repaths after 2 seconds, turns around and
+			// jams the chokepoint for the units behind.
+			if (TheGlobalData->m_smartPathing && otherMoving && isFollowingMovingUnit(other))
+			{
+				m_blockedFrames = 1;
+				return FALSE;
 			}
 
 			//DEBUG_LOG(("Blocked %s, %x, %s", getObject()->getTemplate()->getName().str(), getObject(), other->getTemplate()->getName().str()));

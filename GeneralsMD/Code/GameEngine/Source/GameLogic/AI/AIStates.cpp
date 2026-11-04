@@ -1626,6 +1626,69 @@ Bool AIInternalMoveToState::getAdjustsDestination() const
 }
 
 /**
+ * TheSuperHackers @tweak Smart pathing stuck detection.
+ * The retail game only repaths when the collision code decides that we are blocked. Units that
+ * slide along a building corner, wiggle in a crowd at the end of a bridge or keep bumping into
+ * each other at the destination never trigger that and can stand still forever.
+ * Every STUCK_CHECK_FRAMES check that we actually moved. If we didn't, get a fresh path, and if
+ * that didn't help either, briefly drive through friendly units so the crowd can untangle.
+ * Returns true if a new path should be computed.
+ */
+Bool AIInternalMoveToState::checkStuck()
+{
+	Object *obj = getMachineOwner();
+	AIUpdateInterface *ai = obj->getAI();
+	const UnsignedInt now = TheGameLogic->getFrame();
+
+	if (!TheGlobalData->m_smartPathing || m_waitingForPath || ai->isWaitingForPath() || ai->getPath() == nullptr ||
+		!ai->isDoingGroundMovement() || ai->getCurLocomotor() == nullptr || obj->isDisabled() ||
+		obj->testStatus(OBJECT_STATUS_IMMOBILE) || obj->testStatus(OBJECT_STATUS_IS_USING_ABILITY) ||
+		obj->isKindOf(KINDOF_PROJECTILE))
+	{
+		// We are not trying to drive anywhere right now, so restart the measurement.
+		m_progressPosition = *obj->getPosition();
+		m_progressFrame = now;
+		m_stuckCount = 0;
+		return false;
+	}
+
+	const UnsignedInt STUCK_CHECK_FRAMES = 2*LOGICFRAMES_PER_SECOND;
+	if (m_progressFrame == 0 || now < m_progressFrame)
+	{
+		m_progressPosition = *obj->getPosition();
+		m_progressFrame = now;
+		return false;
+	}
+	if (now - m_progressFrame < STUCK_CHECK_FRAMES)
+		return false;
+
+	const Real dx = obj->getPosition()->x - m_progressPosition.x;
+	const Real dy = obj->getPosition()->y - m_progressPosition.y;
+	m_progressPosition = *obj->getPosition();
+	m_progressFrame = now;
+
+	// Even the slowest ground units cover several cells in 2 seconds.
+	const Real MIN_PROGRESS = 0.75f*PATHFIND_CELL_SIZE_F;
+	if (dx*dx + dy*dy >= MIN_PROGRESS*MIN_PROGRESS)
+	{
+		m_stuckCount = 0;
+		return false;
+	}
+
+	// Close enough to the end of the path: the normal arrival code handles it.
+	if (ai->getLocomotorDistanceToGoal() < ai->getCurLocomotor()->getCloseEnoughDist())
+		return false;
+
+	++m_stuckCount;
+	if (m_stuckCount >= 2)
+	{
+		// A new path didn't help, we are wedged between other units. Ignore unit collisions for a moment.
+		ai->setIgnoreCollisionTime(2*LOGICFRAMES_PER_SECOND);
+	}
+	return true;
+}
+
+/**
  * (Re)compute a path to the goal position, if we are on our own,
  * or we are the leader of a group.
  */
@@ -1664,6 +1727,7 @@ StateReturnType AIInternalMoveToState::onEnter()
 		}
 	}
 	m_tryOneMoreRepath = true;  // We may try one more repath after the first one is finished.
+	resetStuckCheck();
 	ai->friend_startingMove();
 
 	// get object physics state
@@ -1855,6 +1919,10 @@ StateReturnType AIInternalMoveToState::update()
 		m_blockedRepathTimestamp = TheGameLogic->getFrame();
 		// Intense debug logging jba.
 		//DEBUG_LOG(("Info - Blocked - recomputing."));
+	}
+	else if (checkStuck()) {
+		forceRecompute = true;
+		m_blockedRepathTimestamp = TheGameLogic->getFrame();
 	}
 
 	//Determine if we are on a cliff cell... if so, use the climbing model condition

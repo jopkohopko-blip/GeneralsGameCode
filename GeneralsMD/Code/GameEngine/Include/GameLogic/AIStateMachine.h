@@ -256,6 +256,7 @@ public:
 		m_blockedRepathTimestamp = 0;
 		m_adjustDestinations = true;
 		m_goalLayer = LAYER_INVALID;
+		resetStuckCheck();
 	}
 
 	virtual StateReturnType onEnter() override;
@@ -263,6 +264,9 @@ public:
 	virtual StateReturnType update() override;
 
 protected:
+
+	void resetStuckCheck() { m_progressPosition.zero(); m_progressFrame = 0; m_stuckCount = 0; }
+	Bool checkStuck();																///< TheSuperHackers @tweak Returns true if we should repath because we haven't moved for a while
 
 	void setAdjustsDestination(Bool b) { m_adjustDestinations = b; }
 	Bool getAdjustsDestination() const;
@@ -299,6 +303,10 @@ private:
 	UnsignedInt		m_blockedRepathTimestamp;						///< time of last blocked pathfind
 	Bool					m_adjustDestinations;								///< Adjust destinations to avoid stacking units on top of each other.  Normally true, but
 																										//   occasionally false for things like car bombs.
+	// TheSuperHackers @tweak Smart pathing stuck detection. Transient, intentionally not saved.
+	Coord3D				m_progressPosition;									///< where we were at the last progress check
+	UnsignedInt		m_progressFrame;										///< frame of the last progress check, 0 if none
+	Int						m_stuckCount;												///< consecutive progress checks without moving
 protected:
 	Bool					m_waitingForPath;										///< If we are waiting for a path.
 	Bool					m_tryOneMoreRepath;									///< If true, after we complete movement do another compute path.

@@ -160,6 +160,7 @@ public:
 	Bool m_formationDrag;					///< TheSuperHackers @feature Drag with the order mouse button to line units up along the dragged line.
 	Bool m_formationSmartRoles;		///< TheSuperHackers @feature Formations put tanks in front, anti-air in the middle, infantry and artillery behind.
 	Bool m_formationMoveTogether;	///< TheSuperHackers @feature Groups move at the speed of their slowest member.
+	Bool m_smartPathing;					///< TheSuperHackers @tweak Units follow each other in columns, squeeze past moving infantry and get themselves unstuck.
 	Bool m_rightMouseAlwaysScrolls;
 	Int m_jpegQuality; // TheSuperHackers @feature Quality for JPEG screenshots.
 	Bool m_useWaterPlane;
