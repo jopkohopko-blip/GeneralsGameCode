@@ -420,6 +420,7 @@ public:
 	UnsignedInt m_antiAliasLevel;          ///< value of selected antialias level in the game options
 	UnsignedInt m_textureFilteringMode;       ///< value related to TextureFilterClass::TextureFilterModeEnum
 	UnsignedInt m_textureAnisotropyLevel;     ///< value related to TextureFilterClass::AnisotropicFilterMode
+	Bool m_anisotropicTerrain;                ///< @feature Terrain follows the anisotropic texture filter (Options.ini AnisotropicTerrain)
 
 	Bool m_languageFilterPref;        ///< Bool if user wants to filter language
 	Bool m_loadScreenDemo;						///< Bool if true, run the loadscreen demo movie

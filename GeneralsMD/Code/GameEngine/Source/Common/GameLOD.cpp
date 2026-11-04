@@ -347,6 +347,14 @@ void GameLODManager::init()
 	if ((Real)(m_numRAM)/(Real)(256*1024*1024) >= PROFILE_ERROR_LIMIT)
 		m_memPassed=TRUE;	//check if they have at least 256 MB
 
+	// @feature Options.ini files from older builds hold the recommendation of the original benchmark,
+	// which never reaches the highest level on modern systems. Same rule as in getRecommendedStaticLODLevel().
+	if (m_idealDetailLevel != STATIC_GAME_LOD_UNKNOWN && m_idealDetailLevel < STATIC_GAME_LOD_VERY_HIGH
+		&& m_memPassed && m_numRAM/(1024*1024) >= 1024)
+	{
+		m_idealDetailLevel = STATIC_GAME_LOD_VERY_HIGH;
+	}
+
 	if (m_idealDetailLevel == STATIC_GAME_LOD_UNKNOWN || TheGlobalData->m_forceBenchmark)
 	{
 		if (m_cpuType == XX || TheGlobalData->m_forceBenchmark)

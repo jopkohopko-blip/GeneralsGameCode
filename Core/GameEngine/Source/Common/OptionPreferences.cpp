@@ -178,6 +178,11 @@ TextureFilterClass::AnisotropicFilterMode OptionPreferences::getTextureAnisotrop
 	return level;
 }
 
+Bool OptionPreferences::getAnisotropicTerrainEnabled() const
+{
+	return getBool("AnisotropicTerrain", TRUE);
+}
+
 Int OptionPreferences::getCampaignDifficulty()
 {
 	OptionPreferences::const_iterator it = find("CampaignDifficulty");

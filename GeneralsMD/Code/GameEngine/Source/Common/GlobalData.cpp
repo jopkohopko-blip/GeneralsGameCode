@@ -944,6 +944,7 @@ GlobalData::GlobalData()
 	m_antiAliasLevel = WW3D::MultiSampleModeEnum::MULTISAMPLE_MODE_NONE;
 	m_textureFilteringMode = TextureFilterClass::TextureFilterMode::TEXTURE_FILTER_BILINEAR;
 	m_textureAnisotropyLevel = TextureFilterClass::AnisotropicFilterMode::TEXTURE_FILTER_ANISOTROPIC_2X;
+	m_anisotropicTerrain = TRUE;
 
 //	m_languageFilterPref = false;
 	m_languageFilterPref = true;
@@ -1252,6 +1253,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_antiAliasLevel = optionPref.getAntiAliasing();
 	TheWritableGlobalData->m_textureFilteringMode = optionPref.getTextureFilterMode();
 	TheWritableGlobalData->m_textureAnisotropyLevel = optionPref.getTextureAnisotropyLevel();
+	TheWritableGlobalData->m_anisotropicTerrain = optionPref.getAnisotropicTerrainEnabled();
 
 	Int val=optionPref.getGammaValue();
 	//generate a value between 0.6 and 2.0.

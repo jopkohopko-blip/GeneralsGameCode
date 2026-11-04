@@ -78,6 +78,7 @@ public:
 	WW3D::MultiSampleModeEnum getAntiAliasing() const;
 	TextureFilterClass::TextureFilterMode getTextureFilterMode() const;
 	TextureFilterClass::AnisotropicFilterMode getTextureAnisotropyLevel() const;
+	Bool getAnisotropicTerrainEnabled() const; ///< @feature Options.ini AnisotropicTerrain, default yes
 
 	// Loading speed options
 	Bool getBriefingMoviesEnabled() const;      ///< Options.ini "BriefingMovies": play the campaign load screen briefing movie
