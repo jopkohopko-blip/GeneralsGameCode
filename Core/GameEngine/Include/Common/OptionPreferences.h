@@ -98,6 +98,7 @@ public:
 	Bool getFormationDragEnabled() const;
 	Bool getFormationSmartRolesEnabled() const;
 	Bool getFormationMoveTogetherEnabled() const;
+	Bool getSmartPathingEnabled() const;
 	Int getJpegQuality() const;
 	Real getScrollFactor();
 	Bool getDrawScrollAnchor();

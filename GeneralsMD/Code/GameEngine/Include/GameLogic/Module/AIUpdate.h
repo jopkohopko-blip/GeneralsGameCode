@@ -643,6 +643,7 @@ protected:
 	AttitudeType getAttitude() const;				///< get the current behavior modifier state.
 
 	Bool blockedBy(Object *other); ///< Returns true if we are blocked by "other"
+	Bool isFollowingMovingUnit(Object *other) const; ///< TheSuperHackers @tweak True if "other" is moving away from us, so we are following it in a column
 	Bool needToRotate(); ///< Returns true if we are not pointing in the right direction for movement.
 	Real calculateMaxBlockedSpeed(Object *other) const;
 

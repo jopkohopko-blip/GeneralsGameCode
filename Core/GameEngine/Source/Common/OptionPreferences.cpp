@@ -352,6 +352,18 @@ Bool OptionPreferences::getFormationMoveTogetherEnabled() const
 	return FALSE;
 }
 
+Bool OptionPreferences::getSmartPathingEnabled() const
+{
+	OptionPreferences::const_iterator it = find("SmartPathing");
+	if( it == end() )
+		return TheGlobalData->m_smartPathing;
+
+	if( stricmp( it->second.str(), "yes" ) == 0 )
+		return TRUE;
+
+	return FALSE;
+}
+
 Int OptionPreferences::getJpegQuality() const
 {
 	OptionPreferences::const_iterator it = find("JpegQuality");
