@@ -3794,6 +3794,39 @@ Bool Drawable::isHealthBarAlwaysShown() const
 }
 
 // ------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Progress from the current to the next veterancy rank, 0..1.
+	* Returns false when the object can not gain a rank by experience. */
+// ------------------------------------------------------------------------------------------------
+Bool Drawable::getExperienceBarRatio( Real &ratio ) const
+{
+	ratio = 0.0f;
+
+	const Object *obj = getObject();
+	if( obj == nullptr || obj->isKindOf( KINDOF_STRUCTURE ) )
+		return FALSE;
+
+	const ExperienceTracker *tracker = obj->getExperienceTracker();
+	if( tracker == nullptr || !tracker->isTrainable() )
+		return FALSE;
+
+	const Int level = (Int)tracker->getVeterancyLevel();
+	if( level >= (Int)LEVEL_LAST )
+		return FALSE;
+
+	const Int levelStart = obj->getTemplate()->getExperienceRequired( level );
+	const Int levelEnd = obj->getTemplate()->getExperienceRequired( level + 1 );
+	if( levelEnd <= levelStart )
+		return FALSE;
+
+	ratio = (Real)( tracker->getCurrentExperience() - levelStart ) / (Real)( levelEnd - levelStart );
+	if( ratio < 0.0f )
+		ratio = 0.0f;
+	else if( ratio > 1.0f )
+		ratio = 1.0f;
+	return TRUE;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Draw health bar information for drawable */
 // ------------------------------------------------------------------------------------------------
 void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
@@ -3916,6 +3949,22 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 		TheDisplay->drawFillRect( healthBarRegion->lo.x + 1, healthBarRegion->lo.y + 1,
 															(healthBoxWidth - 2) * healthRatio, healthBoxHeight - 2,
 															color );
+
+		// TheSuperHackers @feature Thin bar under the health bar with the progress to the next veterancy rank.
+		if( TheGlobalData->m_showExperienceBars )
+		{
+			Real experienceRatio;
+			if( getExperienceBarRatio( experienceRatio ) &&
+					( experienceRatio > 0.0f || isSelected() || (TheInGameUI && TheInGameUI->getMousedOverDrawableID() == getID()) ) )
+			{
+				const Real xpBoxY = healthBarRegion->lo.y + healthBoxHeight;
+				const Real xpBoxHeight = 4.0f;
+				TheDisplay->drawFillRect( healthBarRegion->lo.x, xpBoxY, healthBoxWidth, xpBoxHeight, GameMakeColor( 40, 30, 0, 200 ) );
+				TheDisplay->drawFillRect( healthBarRegion->lo.x + 1, xpBoxY + 1,
+																	(healthBoxWidth - 2) * experienceRatio, xpBoxHeight - 2,
+																	GameMakeColor( 255, 200, 40, 255 ) );
+			}
+		}
 	}
 
 }

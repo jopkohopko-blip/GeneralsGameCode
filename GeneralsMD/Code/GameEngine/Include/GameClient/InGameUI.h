@@ -605,6 +605,9 @@ private:
 	void drawSystemTime(Int &x, Int &y);
 	void drawGameTime();
 	void drawPlayerInfoList();
+	void refreshArmyCounterResources();
+	void updateArmyCounterString();
+	void drawArmyCounter(Int &x, Int &y);
 
 public:
 	void registerWindowLayout(WindowLayout *layout); // register a layout for updates
@@ -813,6 +816,12 @@ protected:
 	Coord2D												m_gameTimePosition;
 	Color												m_gameTimeColor;
 	Color												m_gameTimeDropColor;
+
+	// TheSuperHackers @feature Army counter (army size by type and idle workers) in the top left HUD row
+	DisplayString *										m_armyCounterString;
+	UnsignedInt											m_lastArmyCounterFrame;
+	Color												m_armyCounterColor;
+	Color												m_armyCounterDropColor;
 
 	struct PlayerInfoList
 	{

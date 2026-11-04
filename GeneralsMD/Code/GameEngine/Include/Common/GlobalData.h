@@ -448,6 +448,12 @@ public:
 	Int m_healthBarMode;
 	Bool m_allowMoneyPerMinuteForPlayer;
 
+	// TheSuperHackers @feature Campaign HUD additions, see Options.ini keys in OptionPreferences
+	Bool m_showExperienceBars;					///< thin bar under the health bar with progress to the next veterancy rank
+	Bool m_showPowerCooldownTimers;			///< remaining recharge time on the general's power shortcut buttons
+	Bool m_showArmyCounter;							///< army size, idle builders and income line in the top left HUD
+	Bool m_showIdleWorkerCount;					///< number of idle workers on the idle worker button
+
 	// TheSuperHackers @feature bobtista 28/06/2026 user-configurable speed multiplier for game window transitions
 	Real m_gameWindowTransitionSpeedMultiplier;
 

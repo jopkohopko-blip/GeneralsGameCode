@@ -1185,6 +1185,11 @@ InGameUI::InGameUI()
 	m_gameTimeColor = GameMakeColor( 255, 255, 255, 255 );
 	m_gameTimeDropColor = GameMakeColor( 0, 0, 0, 255 );
 
+	m_armyCounterString = nullptr;
+	m_lastArmyCounterFrame = ~0u;
+	m_armyCounterColor = GameMakeColor( 220, 220, 150, 255 );
+	m_armyCounterDropColor = GameMakeColor( 0, 0, 0, 255 );
+
 	m_playerInfoListFont = "Tahoma";
 	m_playerInfoListPointSize = TheGlobalData->m_playerInfoListFontSize;
 	m_playerInfoListBold = TRUE;
@@ -2285,6 +2290,8 @@ void InGameUI::freeCustomUiResources()
 	m_gameTimeString = nullptr;
 	TheDisplayStringManager->freeDisplayString(m_gameTimeFrameString);
 	m_gameTimeFrameString = nullptr;
+	TheDisplayStringManager->freeDisplayString(m_armyCounterString);
+	m_armyCounterString = nullptr;
 
 	m_playerInfoList.clear();
 }
@@ -3786,6 +3793,12 @@ void InGameUI::postWindowDraw()
 	if (m_playerInfoListPointSize > 0 && TheGameLogic->isInGame() && TheControlBar->isObserverControlBarOn())
 	{
 		drawPlayerInfoList();
+	}
+
+	if (TheGlobalData->m_showArmyCounter && m_armyCounterString && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() &&
+			!TheControlBar->isObserverControlBarOn() && TheGameLogic->getDrawIconUI())
+	{
+		drawArmyCounter(hudOffsetX, hudOffsetY);
 	}
 }
 
@@ -6002,6 +6015,18 @@ void InGameUI::showIdleWorkerLayout()
 
 	m_currentIdleWorkerDisplay = getIdleWorkerCount();
 
+	// TheSuperHackers @feature Show how many workers are idle on the idle worker button.
+	if (TheGlobalData->m_showIdleWorkerCount && m_currentIdleWorkerDisplay > 0)
+	{
+		UnicodeString number;
+		number.format(L"%d", m_currentIdleWorkerDisplay);
+		GadgetButtonSetText(m_idleWorkerWin, number);
+	}
+	else
+	{
+		GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
+	}
+
 //	if(m_currentIdleWorkerDisplay < 1)
 //		GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
 //	else
@@ -6062,6 +6087,7 @@ void InGameUI::refreshCustomUiResources()
 	refreshSystemTimeResources();
 	refreshGameTimeResources();
 	refreshPlayerInfoListResources();
+	refreshArmyCounterResources();
 }
 
 void InGameUI::refreshNetworkLatencyResources()
@@ -6142,6 +6168,22 @@ void InGameUI::refreshGameTimeResources()
 	GameFont* gameTimeFont = TheWindowManager->winFindFont(m_gameTimeFont, adjustedGameTimeFontSize, m_gameTimeBold);
 	m_gameTimeString->setFont(gameTimeFont);
 	m_gameTimeFrameString->setFont(gameTimeFont);
+}
+
+void InGameUI::refreshArmyCounterResources()
+{
+	if (!m_armyCounterString)
+	{
+		m_armyCounterString = TheDisplayStringManager->newDisplayString();
+	}
+
+	// Same look as the system time, but never smaller than the default size.
+	Int pointSize = TheGlobalData->m_systemTimeFontSize;
+	if (pointSize < 8)
+		pointSize = 8;
+	GameFont* font = TheWindowManager->winFindFont(m_systemTimeFont, TheGlobalLanguageData->adjustFontSize(pointSize), m_systemTimeBold);
+	m_armyCounterString->setFont(font);
+	m_lastArmyCounterFrame = ~0u;
 }
 
 void InGameUI::refreshPlayerInfoListResources()
@@ -6331,6 +6373,78 @@ void InGameUI::drawSystemTime(Int &x, Int &y)
 	{
 		m_systemTimeString->draw(m_systemTimePosition.x, m_systemTimePosition.y, m_systemTimeColor, m_systemTimeDropColor);
 	}
+}
+
+namespace
+{
+	struct ArmyCount
+	{
+		Int infantry;
+		Int vehicles;
+		Int aircraft;
+		Int workers;
+	};
+
+	void countArmyObject(Object *obj, void *userData)
+	{
+		ArmyCount *count = static_cast<ArmyCount *>(userData);
+		if (obj->isEffectivelyDead() || obj->isKindOf(KINDOF_STRUCTURE) || obj->isKindOf(KINDOF_PROJECTILE) ||
+				obj->isKindOf(KINDOF_IGNORED_IN_GUI) || !obj->isSelectable())
+			return;
+
+		if (obj->getStatusBits().test(OBJECT_STATUS_UNDER_CONSTRUCTION))
+			return;
+
+		if (obj->isKindOf(KINDOF_DOZER) || obj->isKindOf(KINDOF_HARVESTER))
+			++count->workers;
+		else if (obj->isKindOf(KINDOF_AIRCRAFT))
+			++count->aircraft;
+		else if (obj->isKindOf(KINDOF_INFANTRY))
+			++count->infantry;
+		else if (obj->isKindOf(KINDOF_VEHICLE))
+			++count->vehicles;
+	}
+}
+
+void InGameUI::updateArmyCounterString()
+{
+	Player *player = rts::getObservedOrLocalPlayer();
+	if (!player)
+		return;
+
+	ArmyCount count = { 0, 0, 0, 0 };
+	player->iterateObjects(countArmyObject, &count);
+	const Int army = count.infantry + count.vehicles + count.aircraft;
+	const Int idleWorkers = getIdleWorkerCount();
+
+	// "Army: 42 (infantry 20, vehicles 15, aircraft 7)  Workers: 5"
+	UnicodeString text = TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:ArmyCounter",
+		L"\u0410\u0440\u043C\u0438\u044F: %d (\u043F\u0435\u0445\u043E\u0442\u0430 %d, \u0442\u0435\u0445\u043D\u0438\u043A\u0430 %d, \u0430\u0432\u0438\u0430\u0446\u0438\u044F %d)   \u0420\u0430\u0431\u043E\u0447\u0438\u0435: %d",
+		army, count.infantry, count.vehicles, count.aircraft, count.workers);
+
+	if (idleWorkers > 0)
+	{
+		// " (idle: 2, Ctrl+I)"
+		UnicodeString idle = TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:ArmyCounterIdleWorkers",
+			L" (\u0431\u0435\u0437 \u0434\u0435\u043B\u0430: %d, Ctrl+I)", idleWorkers);
+		text.concat(idle);
+	}
+
+	m_armyCounterString->setText(text);
+}
+
+void InGameUI::drawArmyCounter(Int &x, Int &y)
+{
+	// Counting walks all objects of the player, so refresh twice a second only.
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if (m_lastArmyCounterFrame == ~0u || frame < m_lastArmyCounterFrame || frame - m_lastArmyCounterFrame >= LOGICFRAMES_PER_SECOND / 2)
+	{
+		updateArmyCounterString();
+		m_lastArmyCounterFrame = frame;
+	}
+
+	m_armyCounterString->draw(kHudAnchorX + x, kHudAnchorY + y, m_armyCounterColor, m_armyCounterDropColor);
+	x += m_armyCounterString->getWidth() + kHudGapPx;
 }
 
 void InGameUI::drawGameTime()

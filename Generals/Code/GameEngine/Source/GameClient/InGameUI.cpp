@@ -5869,6 +5869,18 @@ void InGameUI::showIdleWorkerLayout()
 
 	m_currentIdleWorkerDisplay = getIdleWorkerCount();
 
+	// TheSuperHackers @feature Show how many workers are idle on the idle worker button.
+	if (TheGlobalData->m_showIdleWorkerCount && m_currentIdleWorkerDisplay > 0)
+	{
+		UnicodeString number;
+		number.format(L"%d", m_currentIdleWorkerDisplay);
+		GadgetButtonSetText(m_idleWorkerWin, number);
+	}
+	else
+	{
+		GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
+	}
+
 //	if(m_currentIdleWorkerDisplay < 1)
 //		GadgetButtonSetText(m_idleWorkerWin, UnicodeString::TheEmptyString);
 //	else
