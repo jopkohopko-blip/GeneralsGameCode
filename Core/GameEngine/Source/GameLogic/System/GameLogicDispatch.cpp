@@ -52,6 +52,7 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LineFormation.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
@@ -560,6 +561,19 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 		case GameMessage::MSG_CREATE_FORMATION:
 		{
 			onCreateFormation(msg, currentlySelectedGroup);
+			break;
+		}
+		case GameMessage::MSG_DO_FORMATION_MOVETO:
+		{
+			// TheSuperHackers @feature Line formation dragged by the player.
+			if (currentlySelectedGroup && msg->getArgumentCount() >= 3)
+			{
+				const Coord3D start = msg->getArgument( 0 )->location;
+				const Coord3D end = msg->getArgument( 1 )->location;
+				const Int flags = msg->getArgument( 2 )->integer;
+				currentlySelectedGroup->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
+				LineFormation::groupMoveToLine( currentlySelectedGroup, start, end, flags, CMD_FROM_PLAYER );
+			}
 			break;
 		}
 		case GameMessage::MSG_CLEAR_INGAME_POPUP_MESSAGE:
@@ -1338,6 +1352,10 @@ bool GameLogic::onDoMoveto(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlyS
 		//DEBUG_LOG(("GameLogicDispatch - got a MSG_DO_MOVETO command"));
 		currentlySelectedGroup->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
 		currentlySelectedGroup->groupMoveToPosition( &dest, false, CMD_FROM_PLAYER );
+
+		// TheSuperHackers @feature The player asked the group to keep together: move at the slowest member's speed.
+		if (msg->getArgumentCount() >= 2 && msg->getArgument( 1 )->boolean)
+			LineFormation::applyGroupSpeedLimit( currentlySelectedGroup );
 	}
 
 	return true;

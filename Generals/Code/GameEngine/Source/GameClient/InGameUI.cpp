@@ -62,6 +62,7 @@
 #include "GameClient/GameWindowID.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/LineFormationPreview.h"
 #include "GameClient/VideoPlayer.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/GadgetStaticText.h"
@@ -3739,6 +3740,9 @@ void InGameUI::postWindowDraw()
 //-------------------------------------------------------------------------------------------------
 void InGameUI::postDraw()
 {
+
+	// TheSuperHackers @feature Show where the units go while a line formation is dragged.
+	LineFormationPreview::draw();
 
 	// render our display strings for the messages if on
 	if( m_messagesOn )
