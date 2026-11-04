@@ -210,6 +210,13 @@ public:
 	/// Calculates the closest construction zone location based on a template.
 	Bool calcClosestConstructionZoneLocation( const ThingTemplate *constructTemplate, Coord3D *location );
 
+	/// Fork @feature Smart AI: per-unit "trying to move but not getting anywhere" tracking.
+	struct SmartStuckInfo
+	{
+		Coord3D pos;
+		UnsignedInt sinceFrame;
+	};
+
 protected:
 
 	// snapshot methods
@@ -249,6 +256,11 @@ protected:
 	void checkForSupplyCenter( BuildListInfo *info, Object *bldg);
  	void queueSupplyTruck();
 	void updateBridgeRepair();
+	void updateSmartTactics();				///< Fork @feature Smart AI, see AIPlayer.cpp
+	void smartHelpEngagedTeammates();
+	void smartUnstickUnits();
+	void smartUseSpecialPowers();
+	Player *findSmartPowerTarget();
 	Bool dozerInQueue();
 	Object *findSupplyCenter(Int minSupplies);
 	static void getPlayerStructureBounds(Region2D *bounds, Int playerNdx, Bool conservative = FALSE );
@@ -290,4 +302,8 @@ protected:
 	ObjectID m_attackedSupplyCenter;
 
 	ObjectID m_curWarehouseID;
+
+	// Fork @feature Smart AI. Transient (not saved): rebuilt within seconds after a load.
+	UnsignedInt m_nextSmartTacticsFrame;
+	std::map<ObjectID, SmartStuckInfo> m_smartStuckInfo;
 };

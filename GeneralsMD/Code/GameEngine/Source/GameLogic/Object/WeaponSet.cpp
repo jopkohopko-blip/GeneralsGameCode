@@ -469,6 +469,31 @@ static Int getVictimAntiMask(const Object* victim)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Fork @feature Smart AI target scoring helper.
+Real WeaponSet::estimateBestDamageAgainst(const Object* obj, const Object* victim) const
+{
+	if (obj == nullptr || victim == nullptr)
+		return 0.0f;
+
+	const Int victimAntiMask = getVictimAntiMask(victim);
+	Real best = 0.0f;
+	for (Int i = 0; i < WEAPONSLOT_COUNT; ++i)
+	{
+		Weapon* weapon = m_weapons[i];
+		if (weapon == nullptr)
+			continue;
+		if (!(weapon->getAntiMask() & victimAntiMask))
+			continue;
+		if (weapon->getStatus() == OUT_OF_AMMO && !weapon->getAutoReloadsClip())
+			continue;
+		const Real damage = weapon->estimateWeaponDamage(obj, victim);
+		if (damage > best)
+			best = damage;
+	}
+	return best;
+}
+
+//-------------------------------------------------------------------------------------------------
 void WeaponSet::weaponSetOnWeaponBonusChange(const Object *source)
 {
 	for( Int i = 0; i < WEAPONSLOT_COUNT;	i++ )

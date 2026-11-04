@@ -265,6 +265,14 @@ public:
 	Object *findClosestEnemy( const Object *me, Real range, UnsignedInt qualifiers,
 		const AttackPriorityInfo *info=nullptr, PartitionFilter *optionalFilter=nullptr);
 
+	// Fork @feature Smart AI (Options.ini "SmartAI", "BrutalAI"); read on every map reset.
+	Bool isSmartAIEnabled() const { return m_smartAI; }
+	Bool isBrutalAIEnabled() const { return m_brutalAI; }
+	/// True if this player is a computer opponent in a non-network game and smart AI is on.
+	Bool isSmartAIPlayer( const Player *player ) const;
+	/// True if this player is a smart computer opponent at "Hard" difficulty and BrutalAI is on.
+	Bool isBrutalAIPlayer( const Player *player ) const;
+
 	Object *findClosestRepulsor( const Object *me, Real range);
 
 	Object *findClosestAlly( const Object *me, Real range, UnsignedInt qualifiers);
@@ -306,6 +314,11 @@ protected:
 
 	UnsignedInt m_nextGroupID;
 	FormationID m_nextFormationID;
+
+	Bool m_smartAI;
+	Bool m_brutalAI;
+
+	Object *findSmartEnemy( const Object *me, Real range, PartitionFilter **filters );
 };
 
 extern AI *TheAI;												///< the Artificial Intelligence singleton

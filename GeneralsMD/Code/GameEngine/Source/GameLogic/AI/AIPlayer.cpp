@@ -61,6 +61,8 @@
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/Module/SpecialPowerModule.h"
+#include "GameLogic/Weapon.h"
 
 
 #define SUPPLY_CENTER_CLOSE_DIST (20*PATHFIND_CELL_SIZE_F)
@@ -84,7 +86,8 @@ m_dozerQueuedForRepair(false),
 m_supplySourceAttackCheckFrame(0),
 m_attackedSupplyCenter(INVALID_ID),
 m_teamSeconds(10),
-m_curWarehouseID(INVALID_ID)
+m_curWarehouseID(INVALID_ID),
+m_nextSmartTacticsFrame(0)
 {
 	m_frameLastBuildingBuilt = TheGameLogic->getFrame();
 	p->setCanBuildUnits(false); // turn off ai production by default.
@@ -1288,7 +1291,7 @@ Bool AIPlayer::computeSuperweaponTarget(const SpecialPowerTemplate *power, Coord
 		for( y = 0; y < yCount; y++ )
 		{
 			pos.x = bestPos.x + (x-5)*(weaponRadius/10);
-			pos.y = bestPos.y + (x-5)*(weaponRadius/10);
+			pos.y = bestPos.y + (y-5)*(weaponRadius/10); // Fork @bugfix was (x-5): only scanned a diagonal
 			pos.z = 0;
 			Int curCash = getPlayerSuperweaponValue( &pos, playerNdx, weaponRadius, targetMilitaryUnits );
 			if ( curCash > cash)
@@ -1762,6 +1765,10 @@ Bool AIPlayer::selectTeamToBuild()
 			m_teamTimer = m_teamTimer/TheAI->getAiData()->m_teamPoorMod;
 		}	else if (m_player->getMoney()->countMoney() > TheAI->getAiData()->m_resourcesWealthy) {
 			m_teamTimer = m_teamTimer/TheAI->getAiData()->m_teamWealthyMod;
+		}
+		// Fork @feature Brutal AI: next attack wave comes sooner.
+		if (TheAI->isBrutalAIPlayer(m_player)) {
+			m_teamTimer = (m_teamTimer*2)/3;
 		}
 		return true;
 	}
@@ -3068,6 +3075,312 @@ void AIPlayer::update()
 
 	updateBridgeRepair(); // Handle any bridge repairs.
 
+	updateSmartTactics(); // Fork @feature Smart AI: team support, unsticking, special powers.
+
+}
+
+//----------------------------------------------------------------------------------------------------------
+// Fork @feature Smart AI
+//
+// Engine-side behaviour that sits on top of the map scripts. Scripts still decide *what* the AI does
+// (which teams to build, where to attack); this only makes the units smarter while they do it:
+//  - idle units help a teammate that is fighting nearby instead of watching it die;
+//  - units that keep "moving" without getting anywhere get a short collision cheat to squeeze free;
+//  - generals' powers and superweapons that the scripts leave unused for a while get fired at the
+//    most valuable enemy spot (Normal and harder; sooner on Hard/Brutal).
+// Only active for computer players in campaign/skirmish with Options.ini "SmartAI" on (default).
+//----------------------------------------------------------------------------------------------------------
+namespace
+{
+	const Real SMART_HELP_RADIUS = 350.0f;
+	const Real SMART_STUCK_MOVE_EPSILON = 15.0f;
+	const UnsignedInt SMART_STUCK_FRAMES = 6*LOGICFRAMES_PER_SECOND;
+
+	Bool isSmartHelper(Object *obj)
+	{
+		if (obj == nullptr || obj->isEffectivelyDead())
+			return FALSE;
+		if (obj->isKindOf(KINDOF_STRUCTURE) || obj->isKindOf(KINDOF_IMMOBILE) || obj->isKindOf(KINDOF_AIRCRAFT))
+			return FALSE;
+		if (obj->isKindOf(KINDOF_DOZER) || obj->isKindOf(KINDOF_HARVESTER))
+			return FALSE;
+		if (obj->getContainedBy() != nullptr || obj->isDisabled())
+			return FALSE;
+		if (obj->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) || obj->testStatus(OBJECT_STATUS_SOLD))
+			return FALSE;
+		AIUpdateInterface *ai = obj->getAI();
+		if (ai == nullptr || !ai->isIdle())
+			return FALSE;
+		if (ai->getMoodMatrixValue() & (MM_Mood_Sleep | MM_Mood_Passive))
+			return FALSE;
+		return obj->isAbleToAttack();
+	}
+
+	struct SmartStuckScan
+	{
+		std::map<ObjectID, AIPlayer::SmartStuckInfo> *oldInfo;
+		std::map<ObjectID, AIPlayer::SmartStuckInfo> *newInfo;
+		UnsignedInt now;
+	};
+
+	void smartStuckScanFunc(Object *obj, void *userData)
+	{
+		SmartStuckScan *scan = static_cast<SmartStuckScan*>(userData);
+		if (obj->isKindOf(KINDOF_STRUCTURE) || obj->isKindOf(KINDOF_AIRCRAFT) || obj->isEffectivelyDead())
+			return;
+		AIUpdateInterface *ai = obj->getAI();
+		if (ai == nullptr || !ai->isMoving())
+			return;
+		if (!ai->isDoingGroundMovement())
+			return;
+
+		const Coord3D *pos = obj->getPosition();
+		AIPlayer::SmartStuckInfo info;
+		std::map<ObjectID, AIPlayer::SmartStuckInfo>::const_iterator it = scan->oldInfo->find(obj->getID());
+		if (it == scan->oldInfo->end())
+		{
+			info.pos = *pos;
+			info.sinceFrame = scan->now;
+		}
+		else
+		{
+			info = it->second;
+			Real dx = pos->x - info.pos.x;
+			Real dy = pos->y - info.pos.y;
+			if (dx*dx + dy*dy > SMART_STUCK_MOVE_EPSILON*SMART_STUCK_MOVE_EPSILON)
+			{
+				info.pos = *pos;
+				info.sinceFrame = scan->now;
+			}
+			else if (scan->now - info.sinceFrame >= SMART_STUCK_FRAMES)
+			{
+				// Wants to move but has not got anywhere for a while: let it slide through friendly units.
+				ai->setIgnoreCollisionTime(2*LOGICFRAMES_PER_SECOND);
+				info.sinceFrame = scan->now;
+			}
+		}
+		(*scan->newInfo)[obj->getID()] = info;
+	}
+}
+
+void AIPlayer::updateSmartTactics()
+{
+	if (!TheAI->isSmartAIPlayer(m_player))
+		return;
+
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if (now < m_nextSmartTacticsFrame)
+		return;
+	// Once a second, staggered by player so several AIs don't all think on the same frame.
+	m_nextSmartTacticsFrame = now + LOGICFRAMES_PER_SECOND + (m_player->getPlayerIndex() % 4);
+
+	smartHelpEngagedTeammates();
+	smartUnstickUnits();
+	smartUseSpecialPowers();
+}
+
+void AIPlayer::smartHelpEngagedTeammates()
+{
+	const Int MAX_ENGAGED = 16;
+	for (Player::PlayerTeamList::const_iterator it = m_player->getPlayerTeams()->begin(); it != m_player->getPlayerTeams()->end(); ++it)
+	{
+		for (DLINK_ITERATOR<Team> iter = (*it)->iterate_TeamInstanceList(); !iter.done(); iter.advance())
+		{
+			Team *team = iter.cur();
+			if (team == nullptr)
+				continue;
+
+			Object *engaged[MAX_ENGAGED];
+			Int numEngaged = 0;
+			Bool anyIdle = FALSE;
+			for (DLINK_ITERATOR<Object> mIter = team->iterate_TeamMemberList(); !mIter.done(); mIter.advance())
+			{
+				Object *obj = mIter.cur();
+				AIUpdateInterface *ai = obj ? obj->getAI() : nullptr;
+				if (ai == nullptr || obj->isEffectivelyDead())
+					continue;
+				if (ai->isAttacking() && ai->getCurrentVictim() != nullptr)
+				{
+					if (numEngaged < MAX_ENGAGED)
+						engaged[numEngaged++] = obj;
+				}
+				else if (!anyIdle && ai->isIdle())
+				{
+					anyIdle = TRUE;
+				}
+			}
+			if (numEngaged == 0 || !anyIdle)
+				continue;
+
+			for (DLINK_ITERATOR<Object> mIter = team->iterate_TeamMemberList(); !mIter.done(); mIter.advance())
+			{
+				Object *obj = mIter.cur();
+				if (!isSmartHelper(obj))
+					continue;
+
+				// Nearest fighting teammate.
+				Object *buddy = nullptr;
+				Real bestDistSqr = SMART_HELP_RADIUS*SMART_HELP_RADIUS;
+				for (Int i = 0; i < numEngaged; ++i)
+				{
+					Real distSqr = ThePartitionManager->getDistanceSquared(obj, engaged[i], FROM_CENTER_2D);
+					if (distSqr < bestDistSqr)
+					{
+						bestDistSqr = distSqr;
+						buddy = engaged[i];
+					}
+				}
+				if (buddy == nullptr)
+					continue;
+
+				Object *victim = buddy->getAI()->getCurrentVictim();
+				AIUpdateInterface *ai = obj->getAI();
+				if (victim && !victim->isEffectivelyDead())
+				{
+					CanAttackResult result = obj->getAbleToAttackSpecificObject(ATTACK_NEW_TARGET, victim, CMD_FROM_AI);
+					if (result == ATTACKRESULT_POSSIBLE || result == ATTACKRESULT_POSSIBLE_AFTER_MOVING)
+					{
+						ai->aiAttackObject(victim, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
+						continue;
+					}
+				}
+				// Can't hit what the buddy is shooting at: move up next to him, fighting on the way.
+				ai->aiAttackMoveToPosition(buddy->getPosition(), NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
+			}
+		}
+	}
+}
+
+void AIPlayer::smartUnstickUnits()
+{
+	std::map<ObjectID, SmartStuckInfo> newInfo;
+	SmartStuckScan scan;
+	scan.oldInfo = &m_smartStuckInfo;
+	scan.newInfo = &newInfo;
+	scan.now = TheGameLogic->getFrame();
+	m_player->iterateObjects(smartStuckScanFunc, &scan);
+	m_smartStuckInfo.swap(newInfo);
+}
+
+static Bool isSmartAutoFirePower(SpecialPowerType type)
+{
+	switch (type)
+	{
+		// Damaging strikes aimed at an area. Anything else (paradrops, hacks, spy powers, repairs,
+		// powers that need an object target) is left to the map scripts.
+		case SPECIAL_DAISY_CUTTER:
+		case AIRF_SPECIAL_DAISY_CUTTER:
+		case SPECIAL_CARPET_BOMB:
+		case SPECIAL_CHINA_CARPET_BOMB:
+		case EARLY_SPECIAL_CHINA_CARPET_BOMB:
+		case AIRF_SPECIAL_CARPET_BOMB:
+		case SPECIAL_CLUSTER_MINES:
+		case NUKE_SPECIAL_CLUSTER_MINES:
+		case SPECIAL_EMP_PULSE:
+		case SPECIAL_NAPALM_STRIKE:
+		case SPECIAL_NEUTRON_MISSILE:
+		case NUKE_SPECIAL_NEUTRON_MISSILE:
+		case SUPW_SPECIAL_NEUTRON_MISSILE:
+		case SPECIAL_ANTHRAX_BOMB:
+		case SPECIAL_SCUD_STORM:
+		case SPECIAL_A10_THUNDERBOLT_STRIKE:
+		case AIRF_SPECIAL_A10_THUNDERBOLT_STRIKE:
+		case SPECIAL_ARTILLERY_BARRAGE:
+		case SPECIAL_PARTICLE_UPLINK_CANNON:
+		case SUPW_SPECIAL_PARTICLE_UPLINK_CANNON:
+		case LAZR_SPECIAL_PARTICLE_UPLINK_CANNON:
+		case SPECIAL_SPECTRE_GUNSHIP:
+		case AIRF_SPECIAL_SPECTRE_GUNSHIP:
+		case SUPR_SPECIAL_CRUISE_MISSILE:
+		case SPECIAL_LEAFLET_DROP:
+		case EARLY_SPECIAL_LEAFLET_DROP:
+		case SPECIAL_TERROR_CELL:
+		case SPECIAL_AMBUSH:
+		case SPECIAL_BLACK_MARKET_NUKE:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
+Player *AIPlayer::findSmartPowerTarget()
+{
+	Player *enemy = getAiEnemy();
+	if (enemy)
+		return enemy;
+
+	// Campaign: aim at a human player we are at war with.
+	for (Int i = 0; i < ThePlayerList->getPlayerCount(); ++i)
+	{
+		Player *p = ThePlayerList->getNthPlayer(i);
+		if (p == nullptr || p == m_player || p->getPlayerType() != PLAYER_HUMAN || !p->isPlayerActive())
+			continue;
+		if (p->getDefaultTeam() && m_player->getRelationship(p->getDefaultTeam()) == ENEMIES)
+			return p;
+	}
+	return nullptr;
+}
+
+void AIPlayer::smartUseSpecialPowers()
+{
+	// How long a power must sit fully charged and unused by the map scripts before the AI fires it itself.
+	UnsignedInt graceFrames;
+	if (TheAI->isBrutalAIPlayer(m_player))
+		graceFrames = 15*LOGICFRAMES_PER_SECOND;
+	else switch (m_player->getPlayerDifficulty())
+	{
+		case DIFFICULTY_HARD:   graceFrames = 45*LOGICFRAMES_PER_SECOND; break;
+		case DIFFICULTY_NORMAL: graceFrames = 120*LOGICFRAMES_PER_SECOND; break;
+		default: return; // Easy: never.
+	}
+
+	const UnsignedInt now = TheGameLogic->getFrame();
+	Player *enemy = nullptr;
+	Bool enemyLooked = FALSE;
+
+	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
+	{
+		if (obj->getControllingPlayer() != m_player)
+			continue;
+		if (obj->isEffectivelyDead() || obj->isDisabled() || obj->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) || obj->testStatus(OBJECT_STATUS_SOLD))
+			continue;
+
+		for (BehaviorModule **m = obj->getBehaviorModules(); *m; ++m)
+		{
+			SpecialPowerModuleInterface *mod = (*m)->getSpecialPower();
+			if (mod == nullptr || mod->isScriptOnly() || !mod->isReady())
+				continue;
+			const SpecialPowerTemplate *power = mod->getSpecialPowerTemplate();
+			if (power == nullptr || !isSmartAutoFirePower(power->getSpecialPowerType()))
+				continue;
+			ScienceType science = mod->getRequiredScience();
+			if (science != SCIENCE_INVALID && !m_player->hasScience(science))
+				continue;
+			UnsignedInt readyFrame = mod->getReadyFrame();
+			if (readyFrame + graceFrames > now)
+				continue;
+
+			if (!enemyLooked)
+			{
+				enemy = findSmartPowerTarget();
+				enemyLooked = TRUE;
+			}
+			if (enemy == nullptr)
+				return;
+
+			Real radius = 50.0f;
+			if (power->getRadiusCursorRadius() > radius)
+				radius = power->getRadiusCursorRadius();
+
+			Coord3D location;
+			if (computeSuperweaponTarget(power, &location, enemy->getPlayerIndex(), radius) && location.lengthSqr() > 0.0f)
+			{
+				mod->doSpecialPowerAtLocation(&location, INVALID_ANGLE, COMMAND_FIRED_BY_SCRIPT);
+				// One power per think, so the player gets a moment between strikes.
+				return;
+			}
+		}
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------

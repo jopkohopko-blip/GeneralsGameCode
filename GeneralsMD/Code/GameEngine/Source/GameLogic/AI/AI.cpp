@@ -29,6 +29,7 @@
 
 #include "Common/CRCDebug.h"
 #include "Common/GameState.h"
+#include "Common/OptionPreferences.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
@@ -37,8 +38,11 @@
 #include "Common/XferCRC.h"
 
 #include "GameLogic/AI.h"
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/BodyModule.h"
+#include "GameLogic/Object.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/SidesList.h"
@@ -304,6 +308,8 @@ AI::AI()
 	m_aiData = NEW TAiData;
 	m_pathfinder = NEW Pathfinder;
 	m_nextFormationID = NO_FORMATION_ID;
+	m_smartAI = TRUE;
+	m_brutalAI = FALSE;
 }
 
 /**
@@ -348,6 +354,31 @@ void AI::reset()
 	m_nextGroupID = 0;
 	m_nextFormationID = NO_FORMATION_ID;
 	getNextFormationID(); // increment once past NO_FORMATION_ID.  jba.
+
+	// Fork @feature Smart AI: re-read the switches for every map so Options.ini edits apply to the next mission.
+	{
+		OptionPreferences pref;
+		m_smartAI = pref.getSmartAIEnabled();
+		m_brutalAI = pref.getBrutalAIEnabled();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// Fork @feature Smart AI
+//-------------------------------------------------------------------------------------------------
+Bool AI::isSmartAIPlayer( const Player *player ) const
+{
+	if (!m_smartAI || player == nullptr || TheGameLogic == nullptr)
+		return FALSE;
+	if (player->getPlayerType() != PLAYER_COMPUTER)
+		return FALSE;
+	// Never in network games: everybody must run the same logic there.
+	return TheGameLogic->isInSinglePlayerGame() || TheGameLogic->isInSkirmishGame();
+}
+
+Bool AI::isBrutalAIPlayer( const Player *player ) const
+{
+	return m_brutalAI && isSmartAIPlayer(player) && player->getPlayerDifficulty() == DIFFICULTY_HARD;
 }
 
 /**
@@ -596,6 +627,81 @@ static void priorityFunc(Object *obj, void *userData)
 /**
  * Return the closest enemy, according to the qualifiers.
  */
+//-------------------------------------------------------------------------------------------------
+/**
+ * Fork @feature Smart AI target selection for computer units (no script attack priority set).
+ * Looks at the nearest few valid enemies and scores each one:
+ *  - enemies that can shoot back, and especially ones shooting at us, come first;
+ *  - wounded enemies we can finish quickly are preferred (focus fire);
+ *  - enemies our weapons barely scratch (rifles vs. tanks) are avoided if anything better is near;
+ *  - distance still matters, so units do not run across the map past closer threats.
+ */
+Object *AI::findSmartEnemy( const Object *me, Real range, PartitionFilter **filters )
+{
+	const Int MAX_CANDIDATES = 12;
+
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(me, range, FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR);
+	MemoryPoolObjectHolder holder(iter);
+
+	const Object *currentVictim = nullptr;
+	if (me->getAI())
+		currentVictim = me->getAI()->getCurrentVictim();
+
+	Object *best = nullptr;
+	Real bestScore = -1.0e9f;
+	Int count = 0;
+	const Real safeRange = (range > 1.0f) ? range : 1.0f;
+
+	for (Object *enemy = iter->first(); enemy && count < MAX_CANDIDATES; enemy = iter->next(), ++count)
+	{
+		Real score = 0.0f;
+
+		// Distance: up to -300 at the edge of the search range.
+		const Real dist = WWMath::Sqrtf(ThePartitionManager->getDistanceSquared(me, enemy, FROM_BOUNDINGSPHERE_2D));
+		score -= 300.0f * (dist / safeRange);
+
+		// Threat.
+		if (enemy->isAbleToAttack())
+		{
+			score += 150.0f;
+			const AIUpdateInterface *enemyAI = enemy->getAI();
+			if (enemyAI && enemyAI->getCurrentVictim() == me)
+				score += 200.0f;
+		}
+
+		// Weapon effectiveness and focus fire.
+		const BodyModuleInterface *body = enemy->getBodyModule();
+		const Real damage = me->estimateBestWeaponDamageAgainst(enemy);
+		if (body && body->getMaxHealth() > 0.0f)
+		{
+			const Real health = body->getHealth();
+			score += 120.0f * (1.0f - health / body->getMaxHealth());
+			if (damage > 0.0f)
+			{
+				const Real shotsToKill = health / damage;
+				score += 250.0f / (1.0f + shotsToKill);
+			}
+			else
+			{
+				score -= 400.0f;
+			}
+		}
+
+		// Stick with the current target unless something clearly better shows up.
+		if (enemy == currentVictim)
+			score += 60.0f;
+
+		if (score > bestScore)
+		{
+			bestScore = score;
+			best = enemy;
+		}
+	}
+
+	return best;
+}
+
+//-------------------------------------------------------------------------------------------------
 Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifiers,
 														 const AttackPriorityInfo *info, PartitionFilter *optionalFilter)
 {
@@ -686,6 +792,12 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 
 	if (info == nullptr || info == TheScriptEngine->getDefaultAttackInfo())
 	{
+		// Fork @feature Smart AI: computer units weigh threat, wounds and weapon effectiveness
+		// instead of blindly shooting the closest thing.
+		if ((qualifiers & CAN_ATTACK) && isSmartAIPlayer(me->getControllingPlayer()))
+		{
+			return findSmartEnemy(me, range, filters);
+		}
 		// No additional attack info, so just return the closest one.
 		Object* o = ThePartitionManager->getClosestObject( me, range, FROM_BOUNDINGSPHERE_2D, filters );
 		return o;

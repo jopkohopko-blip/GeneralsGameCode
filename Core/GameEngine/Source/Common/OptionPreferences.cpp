@@ -1088,6 +1088,16 @@ Bool OptionPreferences::getLogLoadTimesEnabled() const
 	return getBool("LogLoadTimes", FALSE);
 }
 
+Bool OptionPreferences::getSmartAIEnabled() const
+{
+	return getBool("SmartAI", TRUE);
+}
+
+Bool OptionPreferences::getBrutalAIEnabled() const
+{
+	return getBool("BrutalAI", FALSE);
+}
+
 Bool OptionPreferences::getShowMoneyPerMinute() const
 {
 	OptionPreferences::const_iterator it = find("ShowMoneyPerMinute");

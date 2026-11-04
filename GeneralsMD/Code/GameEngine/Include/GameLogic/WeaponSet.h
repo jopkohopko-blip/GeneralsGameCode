@@ -251,6 +251,10 @@ public:
 	*/
 	CanAttackResult getAbleToAttackSpecificObject( AbleToAttackType t, const Object* obj, const Object* victim, CommandSourceType commandSource, WeaponSlotType specificSlot = (WeaponSlotType)-1 ) const;
 
+	// Fork @feature Smart AI: best estimated damage per shot that any weapon in this set could deal to the
+	// victim (armor, bonuses and anti-masks considered, range ignored). Returns 0 if nothing can hurt it.
+	Real estimateBestDamageAgainst(const Object* obj, const Object* victim) const;
+
 	//When calling this function, all conditions must be validated to the point where we have decided that we wish to attack the object (faction checks, etc).
 	//Now, we are determining if the attack itself is able to be performed!
 	CanAttackResult getAbleToUseWeaponAgainstTarget( AbleToAttackType attackType, const Object *source, const Object *victim, const Coord3D *pos, CommandSourceType commandSource, WeaponSlotType specificSlot = (WeaponSlotType)-1 ) const;

@@ -83,6 +83,8 @@ public:
 	Bool getBriefingMoviesEnabled() const;      ///< Options.ini "BriefingMovies": play the campaign load screen briefing movie
 	Bool getKeepAssetsBetweenMapsEnabled() const; ///< Options.ini "KeepAssetsBetweenMaps": keep loaded models and textures cached between maps
 	Bool getLogLoadTimesEnabled() const;        ///< Options.ini "LogLoadTimes": write LoadTimes.txt with per-stage map load timings
+	Bool getSmartAIEnabled() const;             ///< Options.ini "SmartAI": smarter computer opponents in campaign/skirmish (default yes)
+	Bool getBrutalAIEnabled() const;            ///< Options.ini "BrutalAI": "Hard" computer opponents become "Brutal" (default no)
 
 	UnsignedInt getLANIPAddress();
 	UnsignedInt getOnlineIPAddress();

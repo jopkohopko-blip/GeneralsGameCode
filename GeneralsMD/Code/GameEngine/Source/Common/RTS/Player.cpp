@@ -1941,13 +1941,21 @@ Real Player::getProductionCostChangePercent( AsciiString buildTemplateName ) con
 //=============================================================================
 Real Player::getProductionTimeChangePercent( AsciiString buildTemplateName ) const
 {
+	Real percent = 0.0f;
   ProductionChangeMap::const_iterator it = m_productionTimeChanges.find(NAMEKEY(buildTemplateName));
   if (it != m_productionTimeChanges.end())
 	{
-		return (*it).second;
+		percent = (*it).second;
 	}
 
-	return 0.0f;
+	// Fork @feature Brutal AI: builds units and structures 25% faster.
+	// The caller uses (1 + percent) as a multiplier, so scale that whole factor by 0.75.
+	if (TheAI && TheAI->isBrutalAIPlayer(this))
+	{
+		percent = (1.0f + percent) * 0.75f - 1.0f;
+	}
+
+	return percent;
 }
 
 //=============================================================================
@@ -3419,6 +3427,9 @@ void Player::friend_applyDifficultyBonusesForObject(Object* obj, Bool apply) con
 	if (TheGameLogic->isInSinglePlayerGame())
 	{
 		Real healthFactor = TheGlobalData->m_soloPlayerHealthBonusForDifficulty[getPlayerType()][getPlayerDifficulty()];
+		// Fork @feature Brutal AI: +25% health on top of the "Hard" bonus.
+		if (TheAI && TheAI->isBrutalAIPlayer(this))
+			healthFactor *= 1.25f;
 		if (healthFactor != 1.0f)
 		{
 			BodyModuleInterface* body = obj->getBodyModule();
