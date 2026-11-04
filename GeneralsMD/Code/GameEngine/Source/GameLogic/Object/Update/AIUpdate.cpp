@@ -253,6 +253,7 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 		m_turretAI[i] = nullptr;
 	m_turretSyncFlag = TURRET_INVALID;
 	m_attitude = ATTITUDE_NORMAL;
+	m_stance = UNIT_STANCE_NORMAL;
 	m_nextMoodCheckTime = 0;
 #ifdef ALLOW_DEMORALIZE
 	m_demoralizedFramesLeft = 0;
@@ -4297,6 +4298,80 @@ AttitudeType AIUpdateInterface::getAttitude() const
 	return m_attitude;
 }
 
+//-------------------------------------------------------------------------------------------------
+/**
+ * TheSuperHackers @feature Set the stance chosen by the player.
+ */
+void AIUpdateInterface::setStance( UnitStance stance )
+{
+	if (stance < 0 || stance >= UNIT_STANCE_COUNT)
+		stance = UNIT_STANCE_NORMAL;
+
+	if (m_stance == stance)
+		return;
+
+	m_stance = stance;
+
+	// Stop what the unit started on its own if the new stance forbids it. Player orders are kept.
+	if (m_lastCommandSource == CMD_FROM_AI && getObject()->getControllingPlayer() &&
+			getObject()->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN)
+	{
+		const AIStateType state = getAIStateType();
+		const Bool isAutoAttack = state == AI_ATTACK_OBJECT || state == AI_ATTACK_POSITION;
+		const Bool isRetaliating = state == AI_GUARD_RETALIATE;
+		if ((stance == UNIT_STANCE_HOLD_FIRE && (isAutoAttack || isRetaliating)) ||
+				(stance == UNIT_STANCE_HOLD_POSITION && isRetaliating))
+		{
+			aiIdle(CMD_FROM_AI);
+		}
+	}
+
+	if (stance == UNIT_STANCE_HOLD_FIRE)
+	{
+		// Turrets may hold a target of their own (attack of opportunity), drop it.
+		if (isIdle())
+		{
+			for (Int i = 0; i < MAX_TURRETS; ++i)
+			{
+				const WhichTurretType tur = (WhichTurretType)i;
+				if (m_turretAI[i] && getTurretTargetObject(tur) != nullptr)
+				{
+					setTurretTargetObject(tur, nullptr);
+					recenterTurret(tur);
+				}
+			}
+		}
+	}
+	else if (isIdle())
+	{
+		// Look for targets right away instead of waiting for the next mood check.
+		wakeUpAndAttemptToTarget();
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool AIUpdateInterface::isStanceAllowingAutoTarget() const
+{
+	if (m_stance != UNIT_STANCE_HOLD_FIRE)
+		return TRUE;
+
+	// Hold fire only stops the unit from choosing targets on its own. Attack move, guard and hunt
+	// are orders to fight, so they still pick targets.
+	switch (getAIStateType())
+	{
+		case AI_ATTACK_MOVE_TO:
+		case AI_ATTACKFOLLOW_WAYPOINT_PATH_AS_INDIVIDUALS:
+		case AI_ATTACKFOLLOW_WAYPOINT_PATH_AS_TEAM:
+		case AI_GUARD:
+		case AI_GUARD_TUNNEL_NETWORK:
+		case AI_HUNT:
+		case AI_ATTACK_AREA:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
 /**
  * Return the current state the AI is in.
  */
@@ -4527,9 +4602,13 @@ Bool AIUpdateInterface::canAutoAcquireWhileStealthed() const
 /**
  * Return the next object that our mood suggests we should attack.
  */
-Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle )
+Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle, Bool allowBeyondAttackRange )
 {
 	Object *obj = getObject();
+
+	// TheSuperHackers @feature Units on hold fire do not pick targets on their own.
+	if (!isStanceAllowingAutoTarget())
+		return nullptr;
 
 	// if we're dead, we can't attack
 	if (obj->isEffectivelyDead())
@@ -4680,7 +4759,9 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 	// if we're called by AI, and are human controlled, then our AI will not
 	// allow us to pursue the target. therefore, we should ensure that we only
 	// look for targets that are already within attack range (as opposed to vision range).
-	if (calledByAI && obj->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN)
+	// TheSuperHackers @feature Idle units in the aggressive stance look for targets in their whole vision range
+	// and are allowed to pursue them (see AIAttackApproachTargetState and AIAttackPursueTargetState).
+	if (calledByAI && obj->getControllingPlayer()->getPlayerType() == PLAYER_HUMAN && !(allowBeyondAttackRange && isStanceAllowingChase()))
 	{
 		flags |= AI::WITHIN_ATTACK_RANGE;
 	}
@@ -5110,16 +5191,15 @@ void AIUpdateInterface::crc( Xfer *x )
 	* 3: Removed lastFrameMoved and repulsorCountdown; removed surrender and demoralize variables
 	* 4: Read m_curLocomotorSet from ini
 	* 5: TheSuperHackers @fix Fixed out-of-bounds xfer of m_guardTargetType
+	* 6: TheSuperHackers @feature Added m_stance
 	*/
 // ------------------------------------------------------------------------------------------------
 void AIUpdateInterface::xfer( Xfer *xfer )
 {
   // version
-#if RETAIL_COMPATIBLE_CRC || RETAIL_COMPATIBLE_XFER_SAVE
-	const XferVersion currentVersion = 4;
-#else
-	const XferVersion currentVersion = 5;
-#endif
+	// TheSuperHackers @feature The unit stance is saved in every build of this fork, so the version is no
+	// longer held back at 4 for retail save compatibility.
+	const XferVersion currentVersion = 6;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -5344,6 +5424,20 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 	{
 		Int repulsorCountdown = 0;
 		xfer->xferInt(&repulsorCountdown);
+	}
+
+	if (version >= 6)
+	{
+		Int stance = (Int)m_stance;
+		xfer->xferInt(&stance);
+		if (xfer->getXferMode() == XFER_LOAD)
+		{
+			m_stance = (stance >= 0 && stance < UNIT_STANCE_COUNT) ? (UnitStance)stance : UNIT_STANCE_NORMAL;
+		}
+	}
+	else
+	{
+		m_stance = UNIT_STANCE_NORMAL;
 	}
 
 

@@ -247,6 +247,10 @@ public:
 		MSG_META_TOGGLE_CONTROL_BAR,								///< show/hide controlbar
 		MSG_META_TOGGLE_PLAYER_OBSERVER,						///< TheSuperHackers @feature Toggle the player observer view in game
 		MSG_META_TOGGLE_HEALTH_BARS,								///< TheSuperHackers @feature Cycle the health bar mode (selected, damaged, always)
+		MSG_META_STANCE_NORMAL,											///< TheSuperHackers @feature Set the normal stance on the selected units
+		MSG_META_STANCE_AGGRESSIVE,									///< TheSuperHackers @feature Set the aggressive (pursue) stance on the selected units
+		MSG_META_STANCE_HOLD_POSITION,							///< TheSuperHackers @feature Set the hold position stance on the selected units
+		MSG_META_STANCE_HOLD_FIRE,									///< TheSuperHackers @feature Set the hold fire stance on the selected units
 
 		MSG_META_BEGIN_PATH_BUILD,									///< enter path-building mode
 		MSG_META_END_PATH_BUILD,										///< exit path-building mode
@@ -607,6 +611,7 @@ public:
 		MSG_LOGIC_CRC,															///< CRC from the logic passed around in a network game
 		MSG_SET_MINE_CLEARING_DETAIL,								///< Order selected unit(s) to clear mines
 		MSG_ENABLE_RETALIATION_MODE,								///< Turn retaliation mode on or off.
+		MSG_SET_UNIT_STANCE,												///< TheSuperHackers @feature (Int stance) Set the stance of the currently selected group
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 

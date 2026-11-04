@@ -509,6 +509,7 @@ set(GAMEENGINE_SRC
     Include/GameLogic/SidesList.h
 #    Include/GameLogic/Squad.h
     Include/GameLogic/TerrainLogic.h
+    Include/GameLogic/UnitStance.h
 #    Include/GameLogic/TurretAI.h
 #    Include/GameLogic/VictoryConditions.h
 #    Include/GameLogic/Weapon.h

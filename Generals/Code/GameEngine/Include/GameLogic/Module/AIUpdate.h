@@ -30,6 +30,7 @@
 
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/AI.h"
+#include "GameLogic/UnitStance.h"
 #include "GameLogic/AIStateMachine.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LocomotorSet.h"
@@ -542,7 +543,7 @@ public:
 	///< States should call this with calledByAI set true to prevent them from checking every frame
 	///< States that are doing idle checks should call with calledDuringIdle set true so that they check their
 
-	Object *getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle );
+	Object *getNextMoodTarget( Bool calledByAI, Bool calledDuringIdle, Bool allowBeyondAttackRange = FALSE );
 	UnsignedInt getNextMoodCheckTime() const { return m_nextMoodCheckTime; }
 
 	// This function will return a combination of MoodMatrixParameter flags.
@@ -661,6 +662,13 @@ public:
 
 	void setAllowedToChase( Bool allow ) { m_allowedToChase = allow; }
 	Bool isAllowedToChase() const { return m_allowedToChase; }
+
+	// TheSuperHackers @feature Unit stance chosen by the player (see UnitStance.h)
+	void setStance( UnitStance stance );
+	UnitStance getStance() const { return m_stance; }
+	Bool isStanceAllowingAutoTarget() const;	///< FALSE when hold fire forbids auto targeting in the current state
+	Bool isStanceAllowingChase() const { return m_stance == UNIT_STANCE_AGGRESSIVE; }
+	Bool isStanceAllowingRetaliation() const { return m_stance == UNIT_STANCE_NORMAL || m_stance == UNIT_STANCE_AGGRESSIVE; }
 
 	// only for AIStateMachine.
 	virtual void friend_notifyStateMachineChanged();
@@ -785,6 +793,7 @@ private:
 	Bool				m_executingWaypointQueue;						///< if true, we are moving thru the waypoints
 	Bool				m_retryPath;								///< If true, we need to try the path a second time.  jba.
 	Bool				m_allowedToChase;						///< Allowed to pursue targets.
+	UnitStance	m_stance;										///< TheSuperHackers @feature Stance chosen by the player
 	Bool				m_isInUpdate;								///< If true, we are inside our update method.
 	Bool				m_fixLocoInPostProcess;
 };

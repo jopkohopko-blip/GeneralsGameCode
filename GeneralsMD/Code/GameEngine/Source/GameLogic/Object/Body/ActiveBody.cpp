@@ -780,6 +780,10 @@ Bool ActiveBody::shouldRetaliate(Object *obj)
 		if (!obj->getAI()->isIdle()) {
 			return false;
 		}
+		// TheSuperHackers @feature Units holding position or holding fire do not run off to retaliate.
+		if (!obj->getAI()->isStanceAllowingRetaliation()) {
+			return false;
+		}
 	} else {
 		return false; // Non-ai can't retaliate. [8/26/2003]
 	}
