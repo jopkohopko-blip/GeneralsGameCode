@@ -588,6 +588,9 @@ void ControlBar::populateBuildQueue( Object *producer )
 		//become invisible meaning the image that was there will be showed.
 		m_queueData[ i ].control->winClearStatus( WIN_STATUS_USE_OVERLAY_STATES );
 
+		// TheSuperHackers @feature Right clicks are only used by the unit type buttons of a mixed selection
+		m_queueData[ i ].control->winClearStatus( WIN_STATUS_RIGHT_CLICK );
+
 		// set the text of the window to nothing by default
 		GadgetButtonSetText( m_queueData[ i ].control, L"" );
 
