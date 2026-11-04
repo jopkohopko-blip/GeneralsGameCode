@@ -29,6 +29,7 @@
 #include "Common/CommandLine.h"
 #include "Common/CRCDebug.h"
 #include "Common/LocalFileSystem.h"
+#include "Common/ModLoader.h"
 #include "Common/version.h"
 #include "Common/WorkingDirectory.h"
 #include "GameClient/ClientInstance.h"
@@ -1140,6 +1141,24 @@ Int parseMod(char *args[], Int num)
 	return 1;
 }
 
+// TheSuperHackers @feature Mods folder: -mods "A;B" loads exactly these mods from the Mods folders, in this order.
+Int parseModList(char *args[], Int num)
+{
+	if (num > 1)
+	{
+		ModLoader::setCommandLineModList(args[1]);
+		return 2;
+	}
+	return 1;
+}
+
+// TheSuperHackers @feature Mods folder: -nomods starts the game without any mods from the Mods folders.
+Int parseNoMods(char *args[], Int)
+{
+	ModLoader::setCommandLineNoMods();
+	return 1;
+}
+
 #ifdef DEBUG_LOGGING
 Int parseSetDebugLevel(char *args[], int num)
 {
@@ -1205,6 +1224,11 @@ static CommandLineParam paramsForStartup[] =
 	// The last successful selection wins; otherwise use the executable directory.
 	{ "-setCwd", parseSetCwd },
 	{ "-useCwd", parseUseCwd },
+
+	// TheSuperHackers @feature Choose mods from the Mods folders. Parsed before the file system starts,
+	// because mods are loaded together with the game archives.
+	{ "-mods", parseModList },
+	{ "-nomods", parseNoMods },
 };
 
 // These Params are parsed during Engine Init before INI data is loaded

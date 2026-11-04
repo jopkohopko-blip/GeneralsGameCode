@@ -39,6 +39,7 @@
 #include "Common/PlayerList.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
+#include "Common/ModLoader.h"
 #include "Common/INI.h"
 #include "Common/INIException.h"
 #include "Common/MessageStream.h"
@@ -228,6 +229,25 @@ static void updateWindowTitle()
 		title.concat(gameTitleFinal.str());
 		title.concat(L" ");
 		title.concat(gameVersion.str());
+	}
+
+	// TheSuperHackers @feature Show the mods loaded from the Mods folders.
+	const std::vector<AsciiString>& mods = ModLoader::getLoadedMods();
+	if (!mods.empty())
+	{
+		AsciiString modsA = "[Mods: ";
+		for (size_t i = 0; i < mods.size(); ++i)
+		{
+			if (i > 0)
+				modsA.concat(", ");
+			modsA.concat(mods[i]);
+		}
+		modsA.concat("]");
+		UnicodeString modsU;
+		modsU.translate(modsA);
+		if (!title.isEmpty())
+			title.concat(L" ");
+		title.concat(modsU.str());
 	}
 
 	if (!title.isEmpty())

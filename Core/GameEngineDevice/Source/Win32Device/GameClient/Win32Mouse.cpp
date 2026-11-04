@@ -32,6 +32,7 @@
 #include "Common/Debug.h"
 #include "Common/GlobalData.h"
 #include "Common/LocalFileSystem.h"
+#include "Common/ModLoader.h"
 #include "GameClient/GameClient.h"
 #include "Win32Device/GameClient/Win32Mouse.h"
 #include "WinMain.h"
@@ -393,6 +394,17 @@ void Win32Mouse::initCursorResources()
 					{
 						cursorResources[cursor][direction]=LoadCursorFromFile(fname.str());
 						loaded = TRUE;
+					}
+				}
+
+				// TheSuperHackers @feature Cursors from the Mods folders.
+				if (!loaded)
+				{
+					AsciiString modCursor;
+					if (ModLoader::findLooseFile(resourcePath, modCursor))
+					{
+						cursorResources[cursor][direction]=LoadCursorFromFile(modCursor.str());
+						loaded = (cursorResources[cursor][direction] != nullptr);
 					}
 				}
 

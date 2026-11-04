@@ -50,6 +50,7 @@
 #include "Common/GameAudio.h"
 #include "Common/GameMemory.h"
 #include "Common/GlobalData.h"
+#include "Common/ModLoader.h"
 #include "Common/Registry.h"
 #include "BinkLoader.h"
 
@@ -264,6 +265,26 @@ VideoStreamInterface*	BinkVideoPlayer::open( AsciiString movieTitle )
 			if (handle)
 			{
 				return createStream( handle );
+			}
+		}
+
+		// TheSuperHackers @feature Movies from the Mods folders win over the game's movies.
+		{
+			char relativePaths[2][ _MAX_PATH ];
+			snprintf( relativePaths[0], ARRAY_SIZE(relativePaths[0]), "Data\\%s\\Movies\\%s.%s", GetRegistryLanguage().str(), pVideo->m_filename.str(), VIDEO_EXT );
+			snprintf( relativePaths[1], ARRAY_SIZE(relativePaths[1]), "%s\\%s.%s", VIDEO_PATH, pVideo->m_filename.str(), VIDEO_EXT );
+			for (Int i = 0; i < 2; ++i)
+			{
+				AsciiString modMovie;
+				if (ModLoader::findLooseFile(relativePaths[i], modMovie))
+				{
+					HBINK handle = BinkOpen(modMovie.str(), BINKPRELOADALL );
+					DEBUG_ASSERTLOG(!handle, ("opened mod bink file %s", modMovie.str()));
+					if (handle)
+					{
+						return createStream( handle );
+					}
+				}
 			}
 		}
 

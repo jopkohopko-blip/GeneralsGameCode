@@ -53,5 +53,7 @@ public:
 
 	virtual void loadMods() override;
 protected:
+	void loadModsFolder(); ///< TheSuperHackers @feature Loads mods from the Mods folders, see ModLoader.h
+	Bool loadModArchive(const AsciiString& path);
 
 };

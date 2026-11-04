@@ -36,6 +36,7 @@
 #include "Common/GameAudio.h"
 #include "Common/GameMemory.h"
 #include "Common/LocalFileSystem.h"
+#include "Common/ModLoader.h"
 
 #if RTS_ZEROHOUR
 #include "Common/Registry.h"
@@ -97,6 +98,10 @@ void BIGFileSystem::init() {
     if (!installPath.isEmpty())
       loadArchiveFilesFromDirectory(installPath, "*.big");
 #endif
+
+	// TheSuperHackers @feature Load mods last so that they win over all game archives,
+	// and before any INI is read so that mods can change everything, GameData.ini included.
+	loadModsFolder();
 }
 
 void BIGFileSystem::reset() {
@@ -247,6 +252,16 @@ Bool BIGFileSystem::loadArchiveFilesFromDirectory(AsciiString dir, AsciiString f
 		}
 #endif
 
+		// TheSuperHackers @feature Archives in a Mods folder belong to mods and are only loaded
+		// when that mod is enabled, see loadModsFolder().
+		if (!overwrite && it->getLength() > dir.getLength()) {
+			const char* rel = it->str() + dir.getLength();
+			if (strnicmp(rel, "Mods\\", 5) == 0 || strnicmp(rel, "Mods/", 5) == 0) {
+				it++;
+				continue;
+			}
+		}
+
 		ArchiveFile *archiveFile = openArchiveFile((*it).str());
 
 		if (archiveFile != nullptr) {
@@ -287,4 +302,116 @@ void BIGFileSystem::loadMods()
 		(void)ret;
 		DEBUG_ASSERTLOG(ret, ("loadArchiveFilesFromDirectory(%s) returned FALSE!", TheGlobalData->m_modDir.str()));
 	}
+}
+
+Bool BIGFileSystem::loadModArchive(const AsciiString& path)
+{
+	if (m_archiveFileMap.find(path) != m_archiveFileMap.end()) {
+		return FALSE; // already loaded
+	}
+
+	ArchiveFile *archiveFile = openArchiveFile(path.str());
+	if (archiveFile == nullptr) {
+		DEBUG_LOG(("BIGFileSystem::loadModArchive - could not open %s", path.str()));
+		return FALSE;
+	}
+
+	loadIntoDirectoryTree(archiveFile, TRUE);
+	m_archiveFileMap[path] = archiveFile;
+	DEBUG_LOG(("BIGFileSystem::loadModArchive - loaded %s", path.str()));
+	return TRUE;
+}
+
+void BIGFileSystem::loadModsFolder()
+{
+	ModLoader::ModInfoList mods;
+	ModLoader::selectMods(mods);
+
+	// Lowest priority first: every later load is put in front of what is already there.
+	for (size_t m = 0; m < mods.size(); ++m)
+	{
+		const ModLoader::ModInfo& mod = mods[m];
+		Bool loadedAnything = FALSE;
+
+		if (mod.isArchive)
+		{
+			loadedAnything = loadModArchive(mod.path);
+		}
+		else
+		{
+			// 1. The mod's own .big archives, alphabetically.
+			for (FilenameList::const_iterator it = mod.files.begin(); it != mod.files.end(); ++it)
+			{
+				if (it->endsWithNoCase(".big"))
+					loadedAnything |= loadModArchive(*it);
+			}
+
+			// 2. Loose files win over the mod's archives.
+			const Int rootLen = mod.path.getLength();
+			ArchiveFile *looseFiles = NEW ArchiveFile(mod.name, mod.path);
+			looseFiles->setLooseFileRoot(mod.path);
+			Int looseCount = 0;
+
+			for (FilenameList::const_iterator it = mod.files.begin(); it != mod.files.end(); ++it)
+			{
+				if (it->endsWithNoCase(".big") || it->getLength() <= rootLen)
+					continue;
+
+				AsciiString relPath = it->str() + rootLen;
+
+				// Text files directly in the mod folder are its readme and such, not game data.
+				const char* lastSep = relPath.reverseFind('\\');
+				const char* lastSlash = relPath.reverseFind('/');
+				if (lastSlash != nullptr && (lastSep == nullptr || lastSlash > lastSep))
+					lastSep = lastSlash;
+				if (lastSep == nullptr && (relPath.endsWithNoCase(".txt") || relPath.endsWithNoCase(".md") || relPath.endsWithNoCase(".url")))
+					continue;
+
+				AsciiString dirPart;
+				AsciiString leaf;
+				if (lastSep != nullptr) {
+					dirPart.set(relPath.str(), (int)(lastSep - relPath.str() + 1));
+					leaf = lastSep + 1;
+				}
+				else {
+					leaf = relPath;
+				}
+				if (leaf.isEmpty())
+					continue;
+
+				FileInfo diskInfo;
+				memset(&diskInfo, 0, sizeof(diskInfo));
+				TheLocalFileSystem->getFileInfo(*it, &diskInfo);
+
+				ArchivedFileInfo fileInfo;
+				fileInfo.m_filename = leaf;
+				fileInfo.m_filename.toLower();
+				fileInfo.m_archiveFilename = mod.path;
+				fileInfo.m_archiveFilename.toLower();
+				fileInfo.m_offset = 0;
+				fileInfo.m_size = diskInfo.sizeLow;
+
+				looseFiles->addFile(dirPart, &fileInfo);
+				++looseCount;
+			}
+
+			if (looseCount > 0 && m_archiveFileMap.find(mod.path) == m_archiveFileMap.end())
+			{
+				loadIntoDirectoryTree(looseFiles, TRUE);
+				m_archiveFileMap[mod.path] = looseFiles;
+				ModLoader::registerLooseRoot(mod.path);
+				loadedAnything = TRUE;
+				DEBUG_LOG(("BIGFileSystem::loadModsFolder - %d loose files from %s", looseCount, mod.path.str()));
+			}
+			else
+			{
+				delete looseFiles;
+			}
+		}
+
+		if (loadedAnything)
+			ModLoader::registerLoadedMod(mod.name);
+	}
+
+	ModLoader::writeReport();
 }

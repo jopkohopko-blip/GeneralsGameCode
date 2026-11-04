@@ -249,16 +249,44 @@ File* ArchiveFile::openFile( const Char *filename, Int access )
 
 	RAMFile *ramFile = nullptr;
 
-	if (BitIsSet(access, File::STREAMING))
-		ramFile = newInstance( StreamingArchiveFile );
-	else
-		ramFile = newInstance( RAMFile );
+	if (isLooseFileArchive()) {
+		// TheSuperHackers @feature Mods folder: read the loose file from disk.
+		AsciiString diskPath = m_looseFileRoot;
+		diskPath.concat(filename);
 
-	ramFile->deleteOnClose();
-	if (ramFile->openFromArchive(m_file, fileInfo->m_filename, fileInfo->m_offset, fileInfo->m_size) == FALSE) {
-		ramFile->close();
-		ramFile = nullptr;
-		return nullptr;
+		File *diskFile = TheLocalFileSystem->openFile(diskPath.str(), File::READ | File::BINARY);
+		if (diskFile == nullptr) {
+			return nullptr;
+		}
+
+		if (BitIsSet(access, File::STREAMING) && (access & File::WRITE) == 0) {
+			// Streamed files (music, speech) are read straight from disk.
+			return diskFile;
+		}
+
+		ramFile = newInstance( RAMFile );
+		ramFile->deleteOnClose();
+		const Bool opened = ramFile->openFromArchive(diskFile, fileInfo->m_filename, 0, diskFile->size());
+		diskFile->close();
+		diskFile = nullptr;
+		if (opened == FALSE) {
+			ramFile->close();
+			ramFile = nullptr;
+			return nullptr;
+		}
+	}
+	else {
+		if (BitIsSet(access, File::STREAMING))
+			ramFile = newInstance( StreamingArchiveFile );
+		else
+			ramFile = newInstance( RAMFile );
+
+		ramFile->deleteOnClose();
+		if (ramFile->openFromArchive(m_file, fileInfo->m_filename, fileInfo->m_offset, fileInfo->m_size) == FALSE) {
+			ramFile->close();
+			ramFile = nullptr;
+			return nullptr;
+		}
 	}
 
 	if ((access & File::WRITE) == 0) {
@@ -336,6 +364,13 @@ Bool ArchiveFile::getFileInfo(const AsciiString& filename, FileInfo *fileInfo) c
 
 	if (archivedFileInfo == nullptr) {
 		return FALSE;
+	}
+
+	if (isLooseFileArchive()) {
+		// TheSuperHackers @feature Mods folder: size and time come from the loose file itself.
+		AsciiString diskPath = m_looseFileRoot;
+		diskPath.concat(filename);
+		return TheLocalFileSystem->getFileInfo(diskPath, fileInfo);
 	}
 
 	// fill in the size info.  Since the size can't be bigger than a JUNK file, the high int will always be 0.
