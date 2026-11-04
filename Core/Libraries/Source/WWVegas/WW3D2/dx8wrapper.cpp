@@ -604,6 +604,55 @@ bool DX8Wrapper::Create_Device()
 	return true;
 }
 
+// @feature With MSAA the default depth buffer is multisampled. DX8 does not allow it together with a
+// non-multisampled render target (water reflections, projected shadows), so those get a matching
+// non-multisampled depth buffer instead. It is created on demand and released before device resets.
+static IDirect3DSurface8 *s_nonMultisampledDepthBuffer = nullptr;
+
+static void Release_Non_Multisampled_Depth_Buffer()
+{
+	if (s_nonMultisampledDepthBuffer != nullptr)
+	{
+		s_nonMultisampledDepthBuffer->Release();
+		s_nonMultisampledDepthBuffer = nullptr;
+	}
+}
+
+static IDirect3DSurface8 *Get_Depth_Buffer_For_Render_Target(IDirect3DDevice8 *device, IDirect3DSurface8 *render_target, IDirect3DSurface8 *default_depth_buffer)
+{
+	if (default_depth_buffer == nullptr || render_target == nullptr)
+		return default_depth_buffer;
+
+	D3DSURFACE_DESC depthDesc;
+	if (FAILED(default_depth_buffer->GetDesc(&depthDesc)) || depthDesc.MultiSampleType == D3DMULTISAMPLE_NONE)
+		return default_depth_buffer;
+
+	D3DSURFACE_DESC targetDesc;
+	if (FAILED(render_target->GetDesc(&targetDesc)) || targetDesc.MultiSampleType != D3DMULTISAMPLE_NONE)
+		return default_depth_buffer;
+
+	if (s_nonMultisampledDepthBuffer != nullptr)
+	{
+		D3DSURFACE_DESC cachedDesc;
+		if (SUCCEEDED(s_nonMultisampledDepthBuffer->GetDesc(&cachedDesc))
+			&& cachedDesc.Width >= targetDesc.Width && cachedDesc.Height >= targetDesc.Height)
+		{
+			return s_nonMultisampledDepthBuffer;
+		}
+		Release_Non_Multisampled_Depth_Buffer();
+	}
+
+	// A depth buffer may be larger than the render target, so keep at least the back buffer size.
+	const UINT width = targetDesc.Width > depthDesc.Width ? targetDesc.Width : depthDesc.Width;
+	const UINT height = targetDesc.Height > depthDesc.Height ? targetDesc.Height : depthDesc.Height;
+	if (FAILED(device->CreateDepthStencilSurface(width, height, depthDesc.Format, D3DMULTISAMPLE_NONE, &s_nonMultisampledDepthBuffer)))
+	{
+		s_nonMultisampledDepthBuffer = nullptr;
+		return default_depth_buffer;
+	}
+	return s_nonMultisampledDepthBuffer;
+}
+
 bool DX8Wrapper::Reset_Device(bool reload_assets)
 {
 	WWDEBUG_SAY(("Resetting device."));
@@ -646,6 +695,7 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 	}
 	Invalidate_Cached_Render_States();
 	Set_Render_Target((IDirect3DSurface8*)nullptr);
+	Release_Non_Multisampled_Depth_Buffer();
 
 	hr = _Get_D3D_Device8()->Reset(&_PresentParameters);
 	Increment_DX8_CallCount();
@@ -712,6 +762,7 @@ void DX8Wrapper::Release_Device()
 		** Shutdown all subsystems
 		*/
 		Do_Onetime_Device_Dependent_Shutdowns();
+		Release_Non_Multisampled_Depth_Buffer();
 
 		/*
 		** Release the device
@@ -3476,7 +3527,8 @@ DX8Wrapper::Set_Render_Target(IDirect3DSurface8 *render_target, bool use_default
 			//
 			if (use_default_depth_buffer)
 			{
-				DX8CALL(SetRenderTarget (CurrentRenderTarget, DefaultDepthBuffer));
+				IDirect3DSurface8 *depth_buffer = Get_Depth_Buffer_For_Render_Target(D3DDevice, CurrentRenderTarget, DefaultDepthBuffer);
+				DX8CALL(SetRenderTarget (CurrentRenderTarget, depth_buffer));
 			}
 			else
 			{

@@ -535,6 +535,12 @@ StaticGameLODLevel GameLODManager::getRecommendedStaticLODLevel()
 				if (m_idealDetailLevel >= i)
 					break;	//we already found a higher level than the remaining presets so no need to keep searching.
 		}
+		// @feature The presets above only know CPUs and video chips up to the year 2003, so a modern
+		// system is never recognized and falls back to Low. Any system with at least 1 GB of memory
+		// is far beyond the original requirements, so recommend the highest detail level for it.
+		if (m_memPassed && numMBRam >= 1024)
+			m_idealDetailLevel = STATIC_GAME_LOD_VERY_HIGH;
+
 		//Save ideal detail level for future usage
 		OptionPreferences optionPref;
 		optionPref["IdealStaticGameLOD"] = getStaticGameLODLevelName(m_idealDetailLevel);

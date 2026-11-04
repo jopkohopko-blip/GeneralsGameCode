@@ -1207,6 +1207,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 
 
 	// override INI values with user preferences
+	OptionPreferences::upgradeGraphicsDefaults();
 	OptionPreferences optionPref;
 	TheWritableGlobalData->m_useAlternateMouse = optionPref.getAlternateMouseModeEnabled();
 	TheWritableGlobalData->m_useRightMouseScrollWithAlternateMouse = optionPref.getRightMouseScrollWithAlternateMouseEnabled();

@@ -71,6 +71,10 @@ public:
 	void setWindowMode(WindowMode mode);
 	static void applyWindowModeToGlobalData(WindowMode mode);
 
+	// @feature Moves Options.ini files written by older builds to the modern graphics defaults once.
+	// Only values that still match the old defaults are touched. Stored as "GraphicsDefaultsVersion".
+	static void upgradeGraphicsDefaults();
+
 	WW3D::MultiSampleModeEnum getAntiAliasing() const;
 	TextureFilterClass::TextureFilterMode getTextureFilterMode() const;
 	TextureFilterClass::AnisotropicFilterMode getTextureAnisotropyLevel() const;

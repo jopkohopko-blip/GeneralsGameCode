@@ -114,6 +114,8 @@ IDirect3DSurface8 *W3DShaderManager::m_oldRenderSurface=nullptr;	///<previous re
 IDirect3DTexture8 *W3DShaderManager::m_renderTexture=nullptr;		///<texture into which rendering will be redirected.
 IDirect3DSurface8 *W3DShaderManager::m_newRenderSurface=nullptr;	///<new render target inside m_renderTexture
 IDirect3DSurface8 *W3DShaderManager::m_oldDepthSurface=nullptr;	///<previous depth buffer surface
+IDirect3DSurface8 *W3DShaderManager::m_newDepthSurface=nullptr;	///<non-multisampled depth buffer for render to texture with MSAA
+static Bool s_newDepthSurfaceHasStencil = false;
 /*===========================================================================================*/
 /*=========      Screen Shaders	=============================================================*/
 /*===========================================================================================*/
@@ -2605,6 +2607,7 @@ W3DShaderManager::W3DShaderManager()
 	m_renderTexture = nullptr;
 	m_newRenderSurface = nullptr;
 	m_oldDepthSurface = nullptr;
+	m_newDepthSurface = nullptr;
 	m_renderingToTexture = false;
 	Int i;
 	for (i=0; i<W3DShaderManager::ST_MAX; i++)
@@ -2646,25 +2649,45 @@ void W3DShaderManager::init()
 		
 		// TheSuperHackers @bugfix Redirecting rendering to a non-multisampled texture
 		// while using a multisampled depth buffer is an API violation in DX8.
-		if (desc.MultiSampleType == D3DMULTISAMPLE_NONE)
+		// @feature With MSAA the effects get their own non-multisampled depth buffer, so the screen
+		// effects (black and white, motion blur, cross fade) keep working with anti-aliasing on.
+		hr = S_OK;
+		if (desc.MultiSampleType != D3DMULTISAMPLE_NONE)
+		{
+			IDirect3DSurface8 *depthSurface = nullptr;
+			hr = DX8Wrapper::_Get_D3D_Device8()->GetDepthStencilSurface(&depthSurface);
+			if (hr == S_OK && depthSurface)
+			{
+				D3DSURFACE_DESC depthDesc;
+				depthSurface->GetDesc(&depthDesc);
+				depthSurface->Release();
+				s_newDepthSurfaceHasStencil = depthDesc.Format == D3DFMT_D24S8 || depthDesc.Format == D3DFMT_D15S1 || depthDesc.Format == D3DFMT_D24X4S4;
+				hr = DX8Wrapper::_Get_D3D_Device8()->CreateDepthStencilSurface(desc.Width, desc.Height, depthDesc.Format, D3DMULTISAMPLE_NONE, &m_newDepthSurface);
+			}
+			else
+			{
+				hr = E_FAIL;
+			}
+			if (hr != S_OK)
+				m_newDepthSurface = nullptr;
+		}
+
+		if (hr == S_OK)
 		{
 			hr=DX8Wrapper::_Get_D3D_Device8()->CreateTexture(desc.Width,desc.Height,1,D3DUSAGE_RENDERTARGET,desc.Format,D3DPOOL_DEFAULT,&m_renderTexture);
-		}
-		else
-		{
-			// Force failure path to avoid MSAA mismatch
-			hr = E_FAIL;
 		}
 
 		if (hr != S_OK)
 		{
 			SAFE_RELEASE(m_oldRenderSurface);
+			SAFE_RELEASE(m_newDepthSurface);
 			m_renderTexture = nullptr;
 		} else {
 			hr = m_renderTexture->GetSurfaceLevel(0, &m_newRenderSurface);
 			if (hr != S_OK)
 			{
 				SAFE_RELEASE(m_renderTexture);
+				SAFE_RELEASE(m_newDepthSurface);
 				m_newRenderSurface = nullptr;
 			}	else {
 				hr = DX8Wrapper::_Get_D3D_Device8()->GetDepthStencilSurface(&m_oldDepthSurface);
@@ -2672,6 +2695,7 @@ void W3DShaderManager::init()
 				{
 					SAFE_RELEASE(m_newRenderSurface);
 					SAFE_RELEASE(m_renderTexture);
+					SAFE_RELEASE(m_newDepthSurface);
 					m_oldDepthSurface = nullptr;
 				}
 			}
@@ -2713,6 +2737,7 @@ void W3DShaderManager::shutdown()
 	SAFE_RELEASE(m_renderTexture);
 	SAFE_RELEASE(m_oldRenderSurface);
 	SAFE_RELEASE(m_oldDepthSurface);
+	SAFE_RELEASE(m_newDepthSurface);
 	m_currentShader = ST_INVALID;
 	m_currentFilter = FT_NULL_FILTER;
 	//release any assets associated with a shader (vertex/pixel shaders, textures, etc.)
@@ -2870,7 +2895,8 @@ void W3DShaderManager::startRenderToTexture()
 	DEBUG_ASSERTCRASH(!m_renderingToTexture, ("Already rendering to texture - cannot nest calls."));
 
 	if (m_renderingToTexture || m_newRenderSurface==nullptr || m_oldDepthSurface==nullptr) return;
-	HRESULT hr = DX8Wrapper::_Get_D3D_Device8()->SetRenderTarget(m_newRenderSurface,m_oldDepthSurface);
+	IDirect3DSurface8 *depthSurface = m_newDepthSurface ? m_newDepthSurface : m_oldDepthSurface;
+	HRESULT hr = DX8Wrapper::_Get_D3D_Device8()->SetRenderTarget(m_newRenderSurface,depthSurface);
 
 	// TheSuperHackers @bugfix If SetRenderTarget fails (e.g. due to MSAA forced by driver
 	// profile causing a depth buffer mismatch that D3DSURFACE_DESC doesn't report), permanently
@@ -2882,10 +2908,17 @@ void W3DShaderManager::startRenderToTexture()
 		SAFE_RELEASE(m_renderTexture);
 		SAFE_RELEASE(m_oldRenderSurface);
 		SAFE_RELEASE(m_oldDepthSurface);
+		SAFE_RELEASE(m_newDepthSurface);
 		return;
 	}
 
 	m_renderingToTexture = true;
+	if (m_newDepthSurface)
+	{
+		// The separate depth buffer starts with unknown contents.
+		const DWORD flags = s_newDepthSurfaceHasStencil ? (D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL) : D3DCLEAR_ZBUFFER;
+		DX8Wrapper::_Get_D3D_Device8()->Clear(0, nullptr, flags, 0, 1.0f, 0);
+	}
 	if (TheGlobalData->m_showSoftWaterEdge)
 	{
 		//Soft water edges use frame buffer destination alpha so we must clear it to a known value.

@@ -37,6 +37,7 @@
 #include "WW3D2/texture.h"
 #include "WW3D2/dx8indexbuffer.h"
 #include "WW3D2/dx8wrapper.h"
+#include "WW3D2/ww3d.h"
 #include "WW3D2/rinfo.h"
 #include "WW3D2/camera.h"
 #include "WW3D2/sortingrenderer.h"
@@ -211,7 +212,8 @@ Bool W3DSmudgeManager::testHardwareSupport()
 		{
 			// TheSuperHackers @bugfix When Render-To-Texture is disabled globally, we fallback
 			// to copying the backbuffer to a texture.
-			if (m_backgroundTexture)
+			// @bugfix DX8 cannot copy from a multisampled back buffer, so there is no fallback with MSAA.
+			if (m_backgroundTexture && WW3D::Get_MSAA_Mode() == WW3D::MULTISAMPLE_MODE_NONE)
 			{
 				m_hardwareSupportStatus = SMUDGE_SUPPORT_YES;
 				return TRUE;

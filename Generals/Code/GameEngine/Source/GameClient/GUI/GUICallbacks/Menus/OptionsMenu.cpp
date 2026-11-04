@@ -1130,7 +1130,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
  	}
 
 	// populate anti aliasing modes
-	AsciiString selectedAliasingMode = (*pref)["AntiAliasing"];
+	// @feature Show the actual mode, which also covers the default when Options.ini has no entry.
 	GadgetComboBoxReset(comboBoxAntiAliasing);
 	AsciiString temp;
 	Int i=0;
@@ -1140,7 +1140,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 		str = TheGameText->fetch( temp );
 		index = GadgetComboBoxAddEntry(comboBoxAntiAliasing, str, color);
 	}
-	Int val = atoi(selectedAliasingMode.str());
+	Int val = (Int)pref->getAntiAliasing();
 	Int pos = 0;
 
 	// TheSuperHackers @info We are converting from human readable value to comboBox entry position

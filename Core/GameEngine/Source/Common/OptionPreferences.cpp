@@ -100,11 +100,54 @@ void OptionPreferences::applyWindowModeToGlobalData(WindowMode mode)
 	TheWritableGlobalData->m_borderless = (mode == WindowMode_Borderless);
 }
 
+// @feature Version of the graphics defaults. Bump it when the defaults change again.
+static const Int GraphicsDefaultsVersion = 1;
+
+void OptionPreferences::upgradeGraphicsDefaults()
+{
+	OptionPreferences pref;
+	if (pref.getInt("GraphicsDefaultsVersion", 0) >= GraphicsDefaultsVersion)
+		return;
+
+	// Older builds wrote the old defaults (no anti-aliasing, bilinear filtering) as soon as the
+	// options menu was saved. Drop those so the modern defaults apply. Deliberate choices stay.
+	OptionPreferences::iterator it = pref.find("AntiAliasing");
+	if (it != pref.end() && atoi(it->second.str()) == 0)
+		pref.erase(it);
+
+	it = pref.find("TextureFilter");
+	if (it != pref.end() && it->second.compareNoCase("Bilinear") == 0)
+		pref.erase(it);
+
+	it = pref.find("AnisotropyLevel");
+	if (it != pref.end() && atoi(it->second.str()) <= 2)
+		pref.erase(it);
+
+	// The original hardware benchmark does not know modern CPUs and picks Low or Medium detail.
+	// When the saved detail level is still the one the benchmark recommended, let it be detected again.
+	OptionPreferences::iterator lod = pref.find("StaticGameLOD");
+	OptionPreferences::iterator ideal = pref.find("IdealStaticGameLOD");
+	if (ideal != pref.end())
+	{
+		const Bool userPickedOther = lod != pref.end() && lod->second.compareNoCase(ideal->second) != 0;
+		if (!userPickedOther && ideal->second.compareNoCase("VeryHigh") != 0)
+		{
+			if (lod != pref.end())
+				pref.erase(lod);
+			pref.erase(ideal);
+		}
+	}
+
+	pref.setInt("GraphicsDefaultsVersion", GraphicsDefaultsVersion);
+	pref.write();
+}
+
 WW3D::MultiSampleModeEnum OptionPreferences::getAntiAliasing() const
 {
+	// @feature Anti-aliasing defaults to 4x MSAA. The device falls back if the GPU does not support it.
 	OptionPreferences::const_iterator it = find("AntiAliasing");
 	if (it == end())
-		return WW3D::MULTISAMPLE_MODE_NONE;
+		return WW3D::MULTISAMPLE_MODE_4X;
 
 	WW3D::MultiSampleModeEnum level = (WW3D::MultiSampleModeEnum)atoi(it->second.str());
 	level = clamp(WW3D::MULTISAMPLE_MODE_NONE, level, WW3D::MULTISAMPLE_MODE_8X);
@@ -117,7 +160,7 @@ TextureFilterClass::TextureFilterMode OptionPreferences::getTextureFilterMode() 
 {
 	OptionPreferences::const_iterator it = find("TextureFilter");
 	if (it == end())
-		return TextureFilterClass::TEXTURE_FILTER_BILINEAR;
+		return TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC; // @feature Modern default
 
 	return TextureFilterClass::getTextureFilterMode(it->second.str());
 }
@@ -126,7 +169,7 @@ TextureFilterClass::AnisotropicFilterMode OptionPreferences::getTextureAnisotrop
 {
 	OptionPreferences::const_iterator it = find("AnisotropyLevel");
 	if (it == end())
-		return TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC_2X;
+		return TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC_16X; // @feature Modern default
 
 	TextureFilterClass::AnisotropicFilterMode level = (TextureFilterClass::AnisotropicFilterMode)atoi(it->second.str());
 	level = clamp(TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC_2X, level, TextureFilterClass::TEXTURE_FILTER_ANISOTROPIC_16X);
